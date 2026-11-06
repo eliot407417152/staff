@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>後台 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+  <header class="bar">
+    <strong>後台管理</strong>
+    <span th:text="${admin.name}">管理員</span>
+    <a th:href="@{/front}">我要打卡</a>
+    <form th:action="@{/logout}" method="post"><button class="link" type="submit">登出</button></form>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <h2>今日出勤（<span th:text="${#temporals.format(#temporals.createToday(), 'yyyy/MM/dd')}">2026/01/01</span>）</h2>
+      <p class="empty" th:if="${#lists.isEmpty(records)}">今天還沒有人打卡。</p>
+      <div class="table-scroll" th:unless="${#lists.isEmpty(records)}">
+        <table>
+          <thead><tr><th>姓名</th><th>帳號</th><th>上班</th><th>下班</th></tr></thead>
+          <tbody>
+            <tr th:each="r : ${records}">
+              <td th:text="${r.employee.name}">王小明</td>
+              <td th:text="${r.employee.username}">emp001</td>
+              <td th:text="${#temporals.format(r.clockIn, 'HH:mm:ss')}">09:00:00</td>
+              <td th:text="${r.clockOut != null} ? ${#temporals.format(r.clockOut, 'HH:mm:ss')} : '-'">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>打卡 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+  <header class="bar">
+    <strong>員工打卡</strong>
+    <span th:text="${employee.name}">姓名</span>
+    <a th:if="${employee.role == 'ADMIN'}" th:href="@{/admin}">後台</a>
+    <form th:action="@{/logout}" method="post"><button class="link" type="submit">登出</button></form>
+  </header>
+
+  <main class="wrap">
+    <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+
+    <section class="card">
+      <h2>今天 <span th:text="${#temporals.format(#temporals.createToday(), 'yyyy/MM/dd')}">2026/01/01</span></h2>
+      <dl class="times">
+        <div>
+          <dt>上班</dt>
+          <dd th:text="${todayRecord != null} ? ${#temporals.format(todayRecord.clockIn, 'HH:mm:ss')} : '尚未打卡'">--</dd>
+        </div>
+        <div>
+          <dt>下班</dt>
+          <dd th:text="${todayRecord != null and todayRecord.clockOut != null} ? ${#temporals.format(todayRecord.clockOut, 'HH:mm:ss')} : '尚未打卡'">--</dd>
+        </div>
+      </dl>
+      <div class="actions">
+        <form th:action="@{/front/clock-in}" method="post">
+          <button type="submit" th:disabled="${todayRecord != null}">上班打卡</button>
+        </form>
+        <form th:action="@{/front/clock-out}" method="post">
+          <button type="submit" th:disabled="${todayRecord == null or todayRecord.clockOut != null}">下班打卡</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>最近 10 筆紀錄</h2>
+      <p class="empty" th:if="${#lists.isEmpty(records)}">還沒有打卡紀錄。</p>
+      <div class="table-scroll" th:unless="${#lists.isEmpty(records)}">
+        <table>
+          <thead><tr><th>日期</th><th>上班</th><th>下班</th></tr></thead>
+          <tbody>
+            <tr th:each="r : ${records}">
+              <td th:text="${r.workDate}">2026-01-01</td>
+              <td th:text="${#temporals.format(r.clockIn, 'HH:mm:ss')}">09:00:00</td>
+              <td th:text="${r.clockOut != null} ? ${#temporals.format(r.clockOut, 'HH:mm:ss')} : '-'">18:00:00</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
