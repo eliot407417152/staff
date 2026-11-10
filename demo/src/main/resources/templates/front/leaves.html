@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>請假 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+  <link rel="stylesheet" th:href="@{/css/leave.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap wide">
+    <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+    <p class="msg error" th:if="${error}" th:text="${error}"></p>
+
+    <section class="card">
+      <h2>今年假別額度（小時）</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>假別</th><th>年度額度</th><th>已核准</th><th>審核中</th></tr></thead>
+          <tbody>
+            <tr th:each="b : ${balances}">
+              <td th:text="${b.leaveType}">事假</td>
+              <td th:text="${b.quotaHours}">112.0</td>
+              <td th:text="${b.approvedHours}">0.0</td>
+              <td th:text="${b.pendingHours}">0.0</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>申請請假</h2>
+      <form th:object="${form}" th:action="@{/front/leaves}" method="post">
+        <ul class="errors" th:if="${#fields.hasErrors('*')}">
+          <li th:each="err : ${#fields.detailedErrors()}" th:text="${err.message}">錯誤</li>
+        </ul>
+        <div class="grid2">
+          <div>
+            <label for="leaveTypeId">假別</label>
+            <select th:field="*{leaveTypeId}">
+              <option value="">請選擇</option>
+              <option th:each="t : ${types}" th:value="${t.id}" th:text="${t.name}">事假</option>
+            </select>
+          </div>
+          <div><label for="startAt">開始時間</label><input type="datetime-local" th:field="*{startAt}" required></div>
+          <div><label for="endAt">結束時間</label><input type="datetime-local" th:field="*{endAt}" required></div>
+        </div>
+        <label for="reason">事由</label>
+        <input th:field="*{reason}" maxlength="200" required>
+        <p class="hint">上班時間 09:00–18:00，午休 12:00–13:00 與週末不計入請假時數；國定假日目前不會自動排除。</p>
+        <div class="form-actions"><button type="submit">送出申請</button></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>我的請假紀錄</h2>
+      <p class="empty" th:if="${#lists.isEmpty(leaves)}">還沒有請假紀錄。</p>
+      <div class="table-scroll" th:unless="${#lists.isEmpty(leaves)}">
+        <table>
+          <thead>
+            <tr><th>假別</th><th>開始</th><th>結束</th><th>時數</th><th>事由</th><th>狀態</th><th>審核意見</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr th:each="l : ${leaves}">
+              <td th:text="${l.leaveType.name}">事假</td>
+              <td th:text="${#temporals.format(l.startAt, 'yyyy-MM-dd HH:mm')}">2026-11-12 09:00</td>
+              <td th:text="${#temporals.format(l.endAt, 'yyyy-MM-dd HH:mm')}">2026-11-12 18:00</td>
+              <td th:text="${#numbers.formatDecimal(l.hours, 1, 1)}">8.0</td>
+              <td class="wrap-text" th:text="${l.reason}">事由</td>
+              <td><span class="badge" th:classappend="${'s-' + l.status.name().toLowerCase()}" th:text="${l.status.label}">審核中</span></td>
+              <td class="wrap-text" th:text="${l.decisionComment != null} ? ${l.decisionComment} : '-'">-</td>
+              <td>
+                <form th:if="${l.cancellable}" th:action="@{/front/leaves/{id}/cancel(id=${l.id})}" method="post">
+                  <button type="submit" class="secondary">取消</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

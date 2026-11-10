@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<body>
+<th:block th:fragment="bar">
+  <header class="bar">
+    <strong>員工系統</strong>
+    <nav>
+      <a th:href="@{/front}">打卡</a>
+      <a th:href="@{/front/leaves}">請假</a>
+      <a th:if="${nav.canApprove}" th:href="@{/front/approvals}">請假審核</a>
+      <a th:href="@{/front/profile}">個人資料</a>
+      <th:block th:if="${nav.admin}">
+        <a th:href="@{/admin}">出勤總覽</a>
+        <a th:href="@{/admin/leaves}">請假紀錄</a>
+        <a th:href="@{/admin/employees}">員工管理</a>
+        <a th:href="@{/admin/departments}">部門</a>
+        <a th:href="@{/admin/settings/employee-no}">員工編號規則</a>
+      </th:block>
+    </nav>
+    <span th:text="${nav.name}">姓名</span>
+    <form th:action="@{/logout}" method="post"><button class="link" type="submit">登出</button></form>
+  </header>
+  <div class="msg error" style="margin:0;border-radius:0;text-align:center" th:if="${nav.emailMissing}">
+    你還沒有登記 Email，忘記密碼時將無法自行重設。請到<a th:href="@{/front/profile}">個人資料</a>填寫。
+  </div>
+</th:block>
+</body>
+</html>

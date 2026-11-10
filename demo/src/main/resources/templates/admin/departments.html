@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>部門 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap">
+    <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+
+    <section class="card">
+      <h2>部門</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>代碼</th><th>名稱</th><th>狀態</th><th></th></tr></thead>
+          <tbody>
+            <tr th:each="d : ${departments}">
+              <td th:text="${d.code}">HQ</td>
+              <td th:text="${d.name}">總公司</td>
+              <td><span class="badge" th:classappend="${!d.active} ? 'off'" th:text="${d.active} ? '使用中' : '已停用'">使用中</span></td>
+              <td>
+                <form th:action="@{/admin/departments/{id}/toggle(id=${d.id})}" method="post">
+                  <button type="submit" class="secondary" th:text="${d.active} ? '停用' : '啟用'">停用</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>新增部門</h2>
+      <form th:object="${form}" th:action="@{/admin/departments}" method="post">
+        <ul class="errors" th:if="${#fields.hasErrors('*')}">
+          <li th:each="err : ${#fields.detailedErrors()}" th:text="${err.message}">錯誤</li>
+        </ul>
+        <div class="grid2">
+          <div><label for="code">部門代碼</label><input th:field="*{code}" maxlength="10" required></div>
+          <div><label for="name">部門名稱</label><input th:field="*{name}" required></div>
+        </div>
+        <div class="form-actions"><button type="submit">新增部門</button></div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

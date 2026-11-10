@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>員工編號規則 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap">
+    <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+
+    <section class="card">
+      <h2>下一個員工編號</h2>
+      <p class="preview" th:text="${preview}">EMP20260001</p>
+      <p class="hint">依目前已儲存的規則與今天的日期計算。實際編號會依新員工的到職日和部門而不同。</p>
+    </section>
+
+    <section class="card">
+      <h2>員工編號規則</h2>
+      <p class="hint">編號 = 前綴 ＋ 部門代碼（選用）＋ 日期（選用）＋ 流水號。修改規則不會變動已存在的員工編號。</p>
+      <form th:object="${form}" th:action="@{/admin/settings/employee-no}" method="post">
+        <ul class="errors" th:if="${#fields.hasErrors('*')}">
+          <li th:each="err : ${#fields.detailedErrors()}" th:text="${err.message}">錯誤</li>
+        </ul>
+        <div class="grid2">
+          <div><label for="prefix">前綴</label><input th:field="*{prefix}" maxlength="10"></div>
+          <label class="check"><input type="checkbox" th:field="*{includeDepartmentCode}"> 編號包含部門代碼</label>
+          <div>
+            <label for="dateFormat">日期部分</label>
+            <select th:field="*{dateFormat}">
+              <option value="">不包含日期</option>
+              <option value="yyyy">西元年 4 碼（2026）</option>
+              <option value="yy">西元年 2 碼（26）</option>
+              <option value="yyyyMM">年月（202611）</option>
+              <option value="yyMM">年月 4 碼（2611）</option>
+            </select>
+          </div>
+          <div>
+            <label for="dateBasis">日期依據</label>
+            <select th:field="*{dateBasis}">
+              <option value="HIRE_DATE">員工到職日</option>
+              <option value="TODAY">建立帳號當天</option>
+            </select>
+          </div>
+          <div><label for="seqLength">流水號位數</label><input type="number" min="1" max="10" th:field="*{seqLength}"></div>
+          <div>
+            <label for="resetPeriod">流水號歸零時機</label>
+            <select th:field="*{resetPeriod}">
+              <option value="YEARLY">每年重新從 1 開始</option>
+              <option value="MONTHLY">每月重新從 1 開始</option>
+              <option value="NEVER">永不歸零</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions"><button type="submit">儲存規則</button></div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

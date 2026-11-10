@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>個人資料 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap">
+    <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+    <p class="msg error" th:if="${mustChange}">
+      你目前使用的是系統產生的臨時密碼，請先在下方「變更密碼」設定新密碼，才能使用其他功能。
+    </p>
+
+    <section class="card">
+      <h2>任職資料</h2>
+      <dl class="info">
+        <dt>員工編號</dt><dd th:text="${employee.employeeNo != null} ? ${employee.employeeNo} : '-'">EMP20260001</dd>
+        <dt>登入帳號</dt><dd th:text="${employee.username}">emp001</dd>
+        <dt>部門</dt><dd th:text="${employee.department != null} ? ${employee.department.name} : '-'">總公司</dd>
+        <dt>職稱</dt><dd th:text="${employee.jobTitle != null} ? ${employee.jobTitle} : '-'">專員</dd>
+        <dt>直屬主管</dt><dd th:text="${employee.manager != null} ? ${employee.manager.name} : '-'">主管</dd>
+        <dt>到職日</dt><dd th:text="${employee.hireDate != null} ? ${employee.hireDate} : '-'">2026-01-01</dd>
+      </dl>
+      <p class="hint">以上資料由人資或管理員維護，如需更正請聯絡管理員。</p>
+    </section>
+
+    <section class="card" id="password-card">
+      <h2>變更密碼</h2>
+      <form th:object="${pwForm}" th:action="@{/front/profile/password}" method="post">
+        <ul class="errors" th:if="${#fields.hasErrors('*')}">
+          <li th:each="err : ${#fields.detailedErrors()}" th:text="${err.message}">錯誤</li>
+        </ul>
+        <label for="currentPassword">目前密碼</label>
+        <input type="password" th:field="*{currentPassword}" autocomplete="current-password" required>
+        <div class="grid2">
+          <div>
+            <label for="newPassword">新密碼</label>
+            <input type="password" th:field="*{newPassword}" autocomplete="new-password" minlength="8" required>
+          </div>
+          <div>
+            <label for="confirmPassword">再次輸入新密碼</label>
+            <input type="password" th:field="*{confirmPassword}" autocomplete="new-password" required>
+          </div>
+        </div>
+        <p class="hint">新密碼長度 8～50 字元，且不可與目前密碼相同。</p>
+        <div class="form-actions"><button type="submit">變更密碼</button></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>我的個人資料</h2>
+      <form th:object="${form}" th:action="@{/front/profile}" method="post">
+        <ul class="errors" th:if="${#fields.hasErrors('*')}">
+          <li th:each="err : ${#fields.detailedErrors()}" th:text="${err.message}">錯誤</li>
+        </ul>
+        <div class="grid2">
+          <div><label for="name">姓名</label><input th:field="*{name}" required></div>
+          <div>
+            <label for="email">Email</label>
+            <input type="email" th:field="*{email}" required>
+            <p class="hint">必填。忘記密碼時，新密碼會寄到這個信箱。</p>
+          </div>
+          <div><label for="phone">電話</label><input type="tel" th:field="*{phone}"></div>
+          <div><label for="birthday">生日</label><input type="date" th:field="*{birthday}"></div>
+        </div>
+        <label for="address">地址</label>
+        <input th:field="*{address}">
+        <div class="grid2">
+          <div><label for="emergencyContactName">緊急聯絡人</label><input th:field="*{emergencyContactName}"></div>
+          <div><label for="emergencyContactPhone">緊急聯絡電話</label><input type="tel" th:field="*{emergencyContactPhone}"></div>
+        </div>
+        <div class="form-actions"><button type="submit">儲存變更</button></div>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

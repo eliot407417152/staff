@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>員工資料 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap wide">
+    <form th:object="${form}" th:action="@{${action}}" method="post">
+      <ul class="errors" th:if="${#fields.hasErrors('*')}">
+        <li th:each="err : ${#fields.detailedErrors()}" th:text="${err.message}">錯誤</li>
+      </ul>
+
+      <section class="card">
+        <h2 th:text="${mode == 'create'} ? '新增員工' : '編輯員工'">員工</h2>
+        <h2>帳號與權限</h2>
+        <div class="grid2">
+          <div>
+            <label for="username">登入帳號</label>
+            <input th:field="*{username}" th:readonly="${mode == 'edit'}" autocomplete="off">
+          </div>
+          <div>
+            <label for="password" th:text="${mode == 'create'} ? '密碼' : '重設密碼'">密碼</label>
+            <input type="password" th:field="*{password}" autocomplete="new-password">
+            <p class="hint" th:if="${mode == 'edit'}">不想變更就留空。</p>
+          </div>
+          <div>
+            <label for="role">角色</label>
+            <select th:field="*{role}">
+              <option value="EMPLOYEE">一般員工（前台）</option>
+              <option value="ADMIN">管理員（前台＋後台）</option>
+            </select>
+          </div>
+          <label class="check"><input type="checkbox" th:field="*{enabled}"> 帳號啟用（取消勾選即停用登入）</label>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>任職資料</h2>
+        <div class="grid2">
+          <div>
+            <label for="employeeNoText">員工編號</label>
+            <input id="employeeNoText" th:value="${employeeNoText}" readonly>
+          </div>
+          <div>
+            <label for="departmentId">部門</label>
+            <select th:field="*{departmentId}">
+              <option value="">（未指定）</option>
+              <option th:each="d : ${departments}" th:value="${d.id}" th:text="${d.code + ' ' + d.name}">HQ 總公司</option>
+            </select>
+          </div>
+          <div>
+            <label for="managerId">直屬主管</label>
+            <select th:field="*{managerId}">
+              <option value="">（無，由管理員審核）</option>
+              <th:block th:each="m : ${managers}">
+                <option th:if="${employee == null or m.id != employee.id}" th:value="${m.id}"
+                        th:text="${(m.employeeNo != null ? m.employeeNo + ' ' : '') + m.name}">EMP20260001 王小明</option>
+              </th:block>
+            </select>
+            <p class="hint">請假申請會交給直屬主管審核；沒有主管時由管理員審核。</p>
+          </div>
+          <div><label for="jobTitle">職稱</label><input th:field="*{jobTitle}"></div>
+          <div><label for="hireDate">到職日</label><input type="date" th:field="*{hireDate}" required></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>個人資料</h2>
+        <div class="grid2">
+          <div><label for="name">姓名</label><input th:field="*{name}" required></div>
+          <div><label for="email">Email</label><input type="email" th:field="*{email}" required></div>
+          <div><label for="phone">電話</label><input type="tel" th:field="*{phone}"></div>
+          <div><label for="birthday">生日</label><input type="date" th:field="*{birthday}"></div>
+        </div>
+        <label for="address">地址</label>
+        <input th:field="*{address}">
+        <div class="grid2">
+          <div><label for="emergencyContactName">緊急聯絡人</label><input th:field="*{emergencyContactName}"></div>
+          <div><label for="emergencyContactPhone">緊急聯絡電話</label><input type="tel" th:field="*{emergencyContactPhone}"></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit">儲存</button>
+          <a class="btn secondary" th:href="@{/admin/employees}">取消</a>
+        </div>
+      </section>
+    </form>
+  </main>
+</body>
+</html>

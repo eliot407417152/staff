@@ -5,14 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>打卡 - 員工系統</title>
   <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
 </head>
 <body>
-  <header class="bar">
-    <strong>員工打卡</strong>
-    <span th:text="${employee.name}">姓名</span>
-    <a th:if="${employee.role == 'ADMIN'}" th:href="@{/admin}">後台</a>
-    <form th:action="@{/logout}" method="post"><button class="link" type="submit">登出</button></form>
-  </header>
+  <header th:replace="~{fragments/nav :: bar}"></header>
 
   <main class="wrap">
     <p class="msg ok" th:if="${message}" th:text="${message}"></p>

@@ -19,7 +19,7 @@ import java.util.Map;
 @RequestMapping("/api/attendance")
 @RequiredArgsConstructor
 @Tag(name = "打卡")
-public class AttendanceApiController {
+public class AttendanceController {
 
     private final AttendanceService service;
 

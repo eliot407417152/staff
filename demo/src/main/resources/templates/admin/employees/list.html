@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>員工管理 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap wide">
+    <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+    <section class="card">
+      <div class="toolbar">
+        <h2>員工管理</h2>
+        <a class="btn" th:href="@{/admin/employees/new}">新增員工</a>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>員工編號</th><th>姓名</th><th>帳號</th><th>部門</th><th>職稱</th><th>角色</th><th>狀態</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr th:each="e : ${employees}">
+              <td th:text="${e.employeeNo != null} ? ${e.employeeNo} : '-'">EMP20260001</td>
+              <td th:text="${e.name}">王小明</td>
+              <td th:text="${e.username}">emp001</td>
+              <td th:text="${e.department != null} ? ${e.department.name} : '-'">總公司</td>
+              <td th:text="${e.jobTitle != null} ? ${e.jobTitle} : '-'">專員</td>
+              <td th:text="${e.role == 'ADMIN'} ? '管理員' : '一般員工'">一般員工</td>
+              <td><span class="badge" th:classappend="${!e.enabled} ? 'off'" th:text="${e.enabled} ? '在職' : '停用'">在職</span></td>
+              <td><a th:href="@{/admin/employees/{id}/edit(id=${e.id})}">編輯</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

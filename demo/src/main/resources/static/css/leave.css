@@ -1,0 +1,10 @@
+.badge.s-pending { background: #fff4d6; color: #8a5a00; }
+.badge.s-approved { background: #e6f4ec; color: var(--ok); }
+.badge.s-rejected { background: #fdeceb; color: var(--danger); }
+.badge.s-cancelled { background: #eceff1; color: var(--muted); }
+td.wrap-text { white-space: normal; min-width: 11rem; }
+.decision { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.decision input { width: 13rem; padding: .35rem .5rem; }
+.decision button { padding: .35rem .8rem; }
+.filters { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
+.filters a.on { font-weight: 700; color: var(--ink); text-decoration: none; }

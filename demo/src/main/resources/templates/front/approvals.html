@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>請假審核 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+  <link rel="stylesheet" th:href="@{/css/leave.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap wide">
+    <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+    <p class="msg error" th:if="${error}" th:text="${error}"></p>
+
+    <section class="card">
+      <h2>待我審核的請假</h2>
+      <p class="empty" th:if="${#lists.isEmpty(requests)}">目前沒有待審核的申請。</p>
+      <div class="table-scroll" th:unless="${#lists.isEmpty(requests)}">
+        <table>
+          <thead>
+            <tr><th>申請人</th><th>假別</th><th>開始</th><th>結束</th><th>時數</th><th>事由</th><th>審核</th></tr>
+          </thead>
+          <tbody>
+            <tr th:each="r : ${requests}">
+              <td th:text="${(r.employee.employeeNo != null ? r.employee.employeeNo + ' ' : '') + r.employee.name}">EMP20260001 王小明</td>
+              <td th:text="${r.leaveType.name}">事假</td>
+              <td th:text="${#temporals.format(r.startAt, 'yyyy-MM-dd HH:mm')}">2026-11-12 09:00</td>
+              <td th:text="${#temporals.format(r.endAt, 'yyyy-MM-dd HH:mm')}">2026-11-12 18:00</td>
+              <td th:text="${#numbers.formatDecimal(r.hours, 1, 1)}">8.0</td>
+              <td class="wrap-text" th:text="${r.reason}">事由</td>
+              <td>
+                <form class="decision" th:action="@{/front/approvals/{id}/approve(id=${r.id})}" method="post">
+                  <input name="comment" maxlength="200" placeholder="審核意見（駁回必填）">
+                  <button type="submit">核准</button>
+                  <button type="submit" class="secondary" th:formaction="@{/front/approvals/{id}/reject(id=${r.id})}">駁回</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

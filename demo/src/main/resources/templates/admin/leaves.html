@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>請假紀錄 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+  <link rel="stylesheet" th:href="@{/css/leave.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap wide">
+    <section class="card">
+      <h2>請假紀錄</h2>
+      <div class="filters">
+        <a th:href="@{/admin/leaves}" th:classappend="${status == null} ? 'on'">全部</a>
+        <a th:href="@{/admin/leaves(status='PENDING')}" th:classappend="${status != null and status.name() == 'PENDING'} ? 'on'">審核中</a>
+        <a th:href="@{/admin/leaves(status='APPROVED')}" th:classappend="${status != null and status.name() == 'APPROVED'} ? 'on'">已核准</a>
+        <a th:href="@{/admin/leaves(status='REJECTED')}" th:classappend="${status != null and status.name() == 'REJECTED'} ? 'on'">已駁回</a>
+        <a th:href="@{/admin/leaves(status='CANCELLED')}" th:classappend="${status != null and status.name() == 'CANCELLED'} ? 'on'">已取消</a>
+      </div>
+      <p class="empty" th:if="${#lists.isEmpty(leaves)}">沒有符合的紀錄。</p>
+      <div class="table-scroll" th:unless="${#lists.isEmpty(leaves)}">
+        <table>
+          <thead>
+            <tr><th>申請人</th><th>假別</th><th>開始</th><th>結束</th><th>時數</th><th>事由</th><th>狀態</th><th>審核人</th><th>審核意見</th></tr>
+          </thead>
+          <tbody>
+            <tr th:each="l : ${leaves}">
+              <td th:text="${(l.employee.employeeNo != null ? l.employee.employeeNo + ' ' : '') + l.employee.name}">EMP20260001 王小明</td>
+              <td th:text="${l.leaveType.name}">事假</td>
+              <td th:text="${#temporals.format(l.startAt, 'yyyy-MM-dd HH:mm')}">2026-11-12 09:00</td>
+              <td th:text="${#temporals.format(l.endAt, 'yyyy-MM-dd HH:mm')}">2026-11-12 18:00</td>
+              <td th:text="${#numbers.formatDecimal(l.hours, 1, 1)}">8.0</td>
+              <td class="wrap-text" th:text="${l.reason}">事由</td>
+              <td><span class="badge" th:classappend="${'s-' + l.status.name().toLowerCase()}" th:text="${l.status.label}">審核中</span></td>
+              <td th:text="${l.decidedBy != null} ? ${l.decidedBy.name} : '-'">-</td>
+              <td class="wrap-text" th:text="${l.decisionComment != null} ? ${l.decisionComment} : '-'">-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
