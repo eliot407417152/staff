@@ -16,16 +16,17 @@
     <p class="msg error" th:if="${error}" th:text="${error}"></p>
 
     <section class="card">
-      <h2>今年假別額度（小時）</h2>
+      <h2>假別額度（小時）</h2>
       <div class="table-scroll">
         <table>
-          <thead><tr><th>假別</th><th>年度額度</th><th>已核准</th><th>審核中</th></tr></thead>
+          <thead><tr><th>假別</th><th>額度</th><th>已核准</th><th>審核中</th><th>計算期間</th></tr></thead>
           <tbody>
             <tr th:each="b : ${balances}">
               <td th:text="${b.leaveType}">事假</td>
               <td th:text="${b.quotaHours}">112.0</td>
               <td th:text="${b.approvedHours}">0.0</td>
               <td th:text="${b.pendingHours}">0.0</td>
+              <td th:text="${b.period}">2026 年度</td>
             </tr>
           </tbody>
         </table>

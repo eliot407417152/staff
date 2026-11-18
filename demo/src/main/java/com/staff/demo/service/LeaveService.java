@@ -38,6 +38,9 @@ public class LeaveService {
     private static final List<LeaveRequest.Status> ACTIVE =
             List.of(LeaveRequest.Status.PENDING, LeaveRequest.Status.APPROVED);
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final int MINUTES_PER_DAY = 8 * 60;
+    /** 假別代碼為 ANNUAL 的是特休，額度依到職日計算，不看假別上的年度上限 */
+    private static final String ANNUAL_CODE = "ANNUAL";
 
     // ---- API 回傳用 ----
     public record LeaveView(Long id, String employeeNo, String employeeName, String leaveType,
@@ -47,7 +50,8 @@ public class LeaveService {
 
     public record TypeView(Long id, String code, String name, Double annualQuotaHours) {}
 
-    public record BalanceView(String leaveType, String quotaHours, String approvedHours, String pendingHours) {}
+    public record BalanceView(String leaveType, String quotaHours, String approvedHours,
+                              String pendingHours, String period) {}
 
     private final LeaveRequestRepository requestRepo;
     private final LeaveTypeRepository typeRepo;
@@ -84,16 +88,30 @@ public class LeaveService {
         return requestRepo.findByEmployeeOrderByStartAtDesc(employee(username));
     }
 
-    /** 今年各假別的額度與使用狀況 */
+    /** 各假別的額度與使用狀況：特休依到職日按週年計算，其他假別為當年度 */
     public List<BalanceView> balances(String username) {
         Employee e = employee(username);
-        LocalDateTime from = LocalDate.of(LocalDate.now().getYear(), 1, 1).atStartOfDay();
-        LocalDateTime to = from.plusYears(1);
-        return activeTypes().stream().map(t -> new BalanceView(
-                t.getName(),
-                t.getAnnualQuotaMinutes() == null ? "不限" : fmt(t.getAnnualQuotaMinutes()),
+        LocalDate today = LocalDate.now();
+        LocalDateTime yearFrom = LocalDate.of(today.getYear(), 1, 1).atStartOfDay();
+        return activeTypes().stream().map(t -> {
+            if (isAnnual(t)) {
+                return AnnualLeavePolicy.on(e.getHireDate(), today)
+                        .map(ent -> balance(e, t, fmt((long) ent.days() * MINUTES_PER_DAY),
+                                ent.start().atStartOfDay(), ent.endExclusive().atStartOfDay(),
+                                ent.start() + " ～ " + ent.endExclusive().minusDays(1)))
+                        .orElseGet(() -> new BalanceView(t.getName(), "0.0", "0.0", "0.0",
+                                e.getHireDate() == null ? "尚未設定到職日" : "到職滿 6 個月後才有特休"));
+            }
+            return balance(e, t, t.getAnnualQuotaMinutes() == null ? "不限" : fmt(t.getAnnualQuotaMinutes()),
+                    yearFrom, yearFrom.plusYears(1), today.getYear() + " 年度");
+        }).toList();
+    }
+
+    private BalanceView balance(Employee e, LeaveType t, String quota,
+                                LocalDateTime from, LocalDateTime to, String period) {
+        return new BalanceView(t.getName(), quota,
                 fmt(requestRepo.sumMinutes(e, t, List.of(LeaveRequest.Status.APPROVED), from, to)),
-                fmt(requestRepo.sumMinutes(e, t, List.of(LeaveRequest.Status.PENDING), from, to)))).toList();
+                fmt(requestRepo.sumMinutes(e, t, List.of(LeaveRequest.Status.PENDING), from, to)), period);
     }
 
     /** 待我審核：管理員看得到所有人的（除了自己的），主管只看自己的下屬 */
@@ -135,16 +153,7 @@ public class LeaveService {
         if (requestRepo.countOverlap(e, ACTIVE, start, end) > 0) {
             throw new IllegalArgumentException("這段時間已有審核中或已核准的請假申請");
         }
-        Integer quota = type.getAnnualQuotaMinutes();
-        if (quota != null) {
-            LocalDateTime from = LocalDate.of(start.getYear(), 1, 1).atStartOfDay();
-            long used = requestRepo.sumMinutes(e, type, ACTIVE, from, from.plusYears(1));
-            if (used + minutes > quota) {
-                throw new IllegalArgumentException(String.format(Locale.ROOT,
-                        "%s年度額度 %s 小時，已使用或審核中 %s 小時，本次申請 %s 小時，超過額度",
-                        type.getName(), fmt(quota), fmt(used), fmt(minutes)));
-            }
-        }
+        checkQuota(e, type, start, minutes);
 
         LeaveRequest r = new LeaveRequest();
         r.setEmployee(e);
@@ -206,6 +215,44 @@ public class LeaveService {
         requestRepo.save(r);
         notifyApplicant(r);
         return r;
+    }
+
+    /** 檢查額度：特休依到職日按週年計算（勞基法第 38 條），其他假別依年度上限 */
+    private void checkQuota(Employee e, LeaveType type, LocalDateTime start, int minutes) {
+        long quota;
+        LocalDateTime from;
+        LocalDateTime to;
+        String scope;
+        if (isAnnual(type)) {
+            if (e.getHireDate() == null) {
+                throw new IllegalArgumentException("尚未設定到職日，無法計算特休，請聯絡管理員");
+            }
+            AnnualLeavePolicy.Entitlement ent = AnnualLeavePolicy.on(e.getHireDate(), start.toLocalDate())
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "特休要到職滿 6 個月（" + e.getHireDate().plusMonths(6) + "）之後才有"));
+            quota = (long) ent.days() * MINUTES_PER_DAY;
+            from = ent.start().atStartOfDay();
+            to = ent.endExclusive().atStartOfDay();
+            scope = "特休（" + ent.start() + " ～ " + ent.endExclusive().minusDays(1) + "）";
+        } else {
+            if (type.getAnnualQuotaMinutes() == null) {
+                return;
+            }
+            quota = type.getAnnualQuotaMinutes();
+            from = LocalDate.of(start.getYear(), 1, 1).atStartOfDay();
+            to = from.plusYears(1);
+            scope = type.getName() + "年度";
+        }
+        long used = requestRepo.sumMinutes(e, type, ACTIVE, from, to);
+        if (used + minutes > quota) {
+            throw new IllegalArgumentException(String.format(Locale.ROOT,
+                    "%s額度 %s 小時，已使用或審核中 %s 小時，本次申請 %s 小時，超過額度",
+                    scope, fmt(quota), fmt(used), fmt(minutes)));
+        }
+    }
+
+    private static boolean isAnnual(LeaveType t) {
+        return ANNUAL_CODE.equals(t.getCode());
     }
 
     // ===================== 工具 =====================
