@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -53,18 +54,30 @@ public class AttendanceService {
         return views(e, List.of(today), rec == null ? List.of() : List.of(rec)).get(0);
     }
 
-    /** 最近 10 筆打卡紀錄，附上工時與狀態 */
-    public List<AttendanceDayView> recentViews(String username) {
+    /**
+     * 某個月（到今天為止）的出勤紀錄：依行事曆每一天都列出來，新的日期在前。
+     * 上班日沒打卡也會顯示（尚未打卡／未出勤／請假），放假日顯示為「非上班日」。到職日之前不列。
+     */
+    public List<AttendanceDayView> monthViews(String username, YearMonth ym) {
         Employee e = getEmployee(username);
-        List<AttendanceRecord> records = attendanceRepo.findTop10ByEmployeeOrderByWorkDateDesc(e);
-        if (records.isEmpty()) {
+        LocalDate today = LocalDate.now();
+        LocalDate from = ym.atDay(1);
+        if (e.getHireDate() != null && e.getHireDate().isAfter(from)) {
+            from = e.getHireDate();
+        }
+        LocalDate to = ym.atEndOfMonth().isAfter(today) ? today : ym.atEndOfMonth();
+        if (to.isBefore(from)) {
             return List.of();
         }
-        List<LocalDate> dates = records.stream().map(AttendanceRecord::getWorkDate).toList();
+        List<LocalDate> dates = new ArrayList<>();
+        for (LocalDate d = to; !d.isBefore(from); d = d.minusDays(1)) {
+            dates.add(d);
+        }
+        List<AttendanceRecord> records = attendanceRepo.findByEmployeeAndWorkDateBetween(e, from, to);
         return views(e, dates, records);
     }
 
-    /** 打卡頁最上方的提醒文字：颱風假、放假日，或今天的上班規則 */
+    /** 打卡頁最上方的提醒文字：颱風假或放假日才有；一般上班日回傳 null（頁面不顯示） */
     public String todayNotice() {
         LocalDate today = LocalDate.now();
         WorkCalendarService.Days days = calendar.days(today, today);
@@ -76,7 +89,7 @@ public class AttendanceService {
         if (off != null) {
             return "今天是放假日（" + off + "），不需要上班。";
         }
-        return "彈性上班 08:00–09:00（標準 08:30–17:30，午休 12:00–13:00），不論幾點到，每天都要上滿 8 小時。";
+        return null;
     }
 
     private List<AttendanceDayView> views(Employee e, List<LocalDate> dates, List<AttendanceRecord> records) {
@@ -119,13 +132,24 @@ public class AttendanceService {
         return String.format(Locale.ROOT, "%d:%02d", minutes / 60, minutes % 60);
     }
 
-    /** 回傳要顯示給使用者的訊息 */
+    /**
+     * 回傳要顯示給使用者的訊息。
+     * 一天只留一筆紀錄（首次上班打卡～最後一次下班打卡），中間的外出／請假時段由已核准的請假扣除。
+     * 已打過下班卡後再按上班打卡，視為「回來繼續上班」，會清除下班時間，等下次下班再打。
+     */
     @Transactional
     public String clockIn(String username) {
         Employee employee = getEmployee(username);
         LocalDate today = LocalDate.now();
-        if (attendanceRepo.findByEmployeeAndWorkDate(employee, today).isPresent()) {
-            return "今天已經打過上班卡了。";
+        Optional<AttendanceRecord> found = attendanceRepo.findByEmployeeAndWorkDate(employee, today);
+        if (found.isPresent()) {
+            AttendanceRecord record = found.get();
+            if (record.getClockOut() == null) {
+                return "今天已經打過上班卡了。";
+            }
+            record.setClockOut(null);
+            attendanceRepo.save(record);
+            return "已重新上班打卡（原本的下班時間已清除，請在真正下班時再打下班卡）。";
         }
         AttendanceRecord record = new AttendanceRecord();
         record.setEmployee(employee);
@@ -135,6 +159,7 @@ public class AttendanceService {
         return "上班打卡成功。";
     }
 
+    /** 下班卡可以重複打，以最後一次為準（例如請中間幾小時假、中途離開又回來） */
     @Transactional
     public String clockOut(String username) {
         Optional<AttendanceRecord> found = findToday(username);
@@ -142,11 +167,9 @@ public class AttendanceService {
             return "請先打上班卡。";
         }
         AttendanceRecord record = found.get();
-        if (record.getClockOut() != null) {
-            return "今天已經打過下班卡了。";
-        }
+        boolean again = record.getClockOut() != null;
         record.setClockOut(LocalDateTime.now());
         attendanceRepo.save(record);
-        return "下班打卡成功。";
+        return again ? "已更新下班時間（以最後一次打卡為準）。" : "下班打卡成功。";
     }
 }

@@ -12,16 +12,48 @@
   <header th:replace="~{fragments/nav :: bar}"></header>
 
   <main class="wrap wide">
+    <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+    <p class="msg error" th:if="${error}" th:text="${error}"></p>
+
     <section class="card">
       <h2>異常出勤 <span th:text="${month}">2026-11</span></h2>
       <div class="filters">
-        <a th:href="@{/admin/abnormal(month=${prevMonth})}">上個月</a>
-        <a th:href="@{/admin/abnormal(month=${nextMonth})}">下個月</a>
+        <a th:href="@{/admin/abnormal(month=${prevMonth},dept=${deptParam},category=${categoryParam},state=${stateParam})}">上個月</a>
+        <a th:href="@{/admin/abnormal(month=${nextMonth},dept=${deptParam},category=${categoryParam},state=${stateParam})}">下個月</a>
       </div>
-      <p class="hint">規則：彈性上班 08:00–09:00，不論幾點到，每天需上滿 8 小時（午休 12:00–13:00 不計，已核准的請假時數可抵扣）。</p>
+      <form class="filter-form" th:action="@{/admin/abnormal}" method="get">
+        <input type="hidden" name="month" th:value="${month}">
+        <div>
+          <label for="dept">部門</label>
+          <select id="dept" name="dept">
+            <option value="">全部部門</option>
+            <option th:each="d : ${departments}" th:value="${d.id}" th:text="${d.name}"
+                    th:selected="${deptParam == d.id.toString()}">總公司</option>
+          </select>
+        </div>
+        <div>
+          <label for="category">分類</label>
+          <select id="category" name="category">
+            <option value="" th:selected="${categoryParam == ''}">全部分類</option>
+            <option value="SHORT" th:selected="${categoryParam == 'SHORT'}">工時不足</option>
+            <option value="MISSING_OUT" th:selected="${categoryParam == 'MISSING_OUT'}">未打下班卡</option>
+            <option value="ABSENT" th:selected="${categoryParam == 'ABSENT'}">未出勤</option>
+            <option value="TYPHOON" th:selected="${categoryParam == 'TYPHOON'}">颱風假</option>
+          </select>
+        </div>
+        <div>
+          <label for="state">處理狀態</label>
+          <select id="state" name="state">
+            <option th:each="s : ${states}" th:value="${s.name()}" th:text="${s.label}"
+                    th:selected="${stateParam == s.name()}">待處理</option>
+          </select>
+        </div>
+        <button type="submit">篩選</button>
+      </form>
+      <p class="hint">異常依「打卡＋已核准請假＋已核准補打卡」即時計算：請假或補打卡核准後會自動消失；確認其實有來上班的，可在下方「註銷」。</p>
     </section>
 
-    <section class="card">
+    <section class="card" th:if="${showTyphoon}">
       <h2>颱風假（不支薪）</h2>
       <p class="empty" th:if="${#lists.isEmpty(typhoonLines)}">這個月沒有颱風假。</p>
 
@@ -61,25 +93,51 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" th:if="${showAbnormal}">
       <h2>工時不足／未打卡</h2>
-      <p class="empty" th:if="${#lists.isEmpty(abnormal)}">這個月（到今天為止）沒有異常。</p>
+      <p class="empty" th:if="${#lists.isEmpty(abnormal)}">沒有符合條件的異常（這個月到今天為止）。</p>
       <div class="table-scroll" th:unless="${#lists.isEmpty(abnormal)}">
         <table>
           <thead>
-            <tr><th>日期</th><th>員工編號</th><th>姓名</th><th>上班</th><th>下班</th><th>實際工時</th><th>請假</th><th>短少</th><th>狀態</th></tr>
+            <tr><th>日期</th><th>員工編號</th><th>姓名</th><th>部門</th><th>上班</th><th>下班</th><th>實際工時</th><th>請假</th><th>短少</th><th>分類</th><th>處理</th></tr>
           </thead>
           <tbody>
             <tr th:each="r : ${abnormal}">
               <td th:text="${r.date}">2026-11-12</td>
               <td th:text="${r.employeeNo}">EMP20260001</td>
               <td th:text="${r.employeeName}">王小明</td>
+              <td th:text="${r.departmentName}">總公司</td>
               <td th:text="${r.clockIn != null} ? ${#temporals.format(r.clockIn, 'HH:mm')} : '-'">-</td>
               <td th:text="${r.clockOut != null} ? ${#temporals.format(r.clockOut, 'HH:mm')} : '-'">-</td>
               <td th:text="${r.worked}">7:30</td>
               <td th:text="${r.leave}">0:00</td>
               <td th:text="${r.shortfall}">0:30</td>
               <td><span class="badge" th:classappend="${r.statusBadge}" th:text="${r.statusLabel}">工時不足</span></td>
+              <td class="wrap-text">
+                <!-- 待處理：管理員註銷（確認其實有來上班／異常不成立） -->
+                <form class="decision" th:unless="${r.resolved}" th:action="@{/admin/abnormal/resolve}" method="post">
+                  <input type="hidden" name="employeeId" th:value="${r.employeeId}">
+                  <input type="hidden" name="date" th:value="${r.date}">
+                  <input type="hidden" name="month" th:value="${month}">
+                  <input type="hidden" name="dept" th:value="${deptParam}">
+                  <input type="hidden" name="category" th:value="${categoryParam}">
+                  <input type="hidden" name="state" th:value="${stateParam}">
+                  <input name="reason" maxlength="200" placeholder="註銷原因（必填）" required>
+                  <button type="submit" class="secondary">註銷</button>
+                </form>
+                <!-- 已註銷：顯示誰、何時、為什麼，可以撤銷 -->
+                <form class="decision" th:if="${r.resolved}" th:action="@{/admin/abnormal/revoke}" method="post">
+                  <span class="badge s-cancelled">已註銷</span>
+                  <span class="hint" th:text="${r.resolvedNote}">管理員 於 … 註銷：…</span>
+                  <input type="hidden" name="employeeId" th:value="${r.employeeId}">
+                  <input type="hidden" name="date" th:value="${r.date}">
+                  <input type="hidden" name="month" th:value="${month}">
+                  <input type="hidden" name="dept" th:value="${deptParam}">
+                  <input type="hidden" name="category" th:value="${categoryParam}">
+                  <input type="hidden" name="state" th:value="${stateParam}">
+                  <button type="submit" class="secondary">撤銷註銷</button>
+                </form>
+              </td>
             </tr>
           </tbody>
         </table>

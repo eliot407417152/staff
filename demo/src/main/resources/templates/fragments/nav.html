@@ -5,18 +5,43 @@
   <header class="bar">
     <strong>員工系統</strong>
     <nav>
-      <a th:href="@{/front}">打卡</a>
-      <a th:href="@{/front/leaves}">請假</a>
-      <a th:if="${nav.canApprove}" th:href="@{/front/approvals}">請假審核</a>
-      <a th:href="@{/front/profile}">個人資料</a>
+      <!-- 每個人都有：我的打卡、請假、補打卡、個人資料 -->
+      <a th:href="@{/front}" th:classappend="${nav.path == '/front'} ? 'on'">打卡</a>
+      <a th:href="@{/front/leaves}" th:classappend="${nav.path == '/front/leaves'} ? 'on'">請假</a>
+      <a th:href="@{/front/makeup}" th:classappend="${nav.path == '/front/makeup'} ? 'on'">補打卡</a>
+      <a th:href="@{/front/profile}" th:classappend="${nav.path == '/front/profile'} ? 'on'">個人資料</a>
+
+      <!-- 審核：主管與管理員 -->
+      <details class="menu" th:if="${nav.canApprove}">
+        <summary th:classappend="${nav.path == '/front/approvals' or nav.path == '/front/makeup/approvals'} ? 'on'">審核</summary>
+        <div class="menu-list">
+          <a th:href="@{/front/approvals}" th:classappend="${nav.path == '/front/approvals'} ? 'on'">請假審核</a>
+          <a th:href="@{/front/makeup/approvals}" th:classappend="${nav.path == '/front/makeup/approvals'} ? 'on'">補打卡審核</a>
+        </div>
+      </details>
+
       <th:block th:if="${nav.admin}">
-        <a th:href="@{/admin}">出勤總覽</a>
-        <a th:href="@{/admin/leaves}">請假紀錄</a>
-        <a th:href="@{/admin/abnormal}">異常出勤</a>
-        <a th:href="@{/admin/calendar}">辦公日曆/颱風假</a>
-        <a th:href="@{/admin/employees}">員工管理</a>
-        <a th:href="@{/admin/departments}">部門</a>
-        <a th:href="@{/admin/settings/employee-no}">員工編號規則</a>
+        <!-- 出勤管理：看資料、處理異常 -->
+        <details class="menu">
+          <summary th:classappend="${nav.path == '/admin' or nav.path == '/admin/abnormal' or nav.path == '/admin/leaves' or nav.path == '/admin/makeup'} ? 'on'">出勤管理</summary>
+          <div class="menu-list">
+            <a th:href="@{/admin}" th:classappend="${nav.path == '/admin'} ? 'on'">出勤總覽（今日）</a>
+            <a th:href="@{/admin/abnormal}" th:classappend="${nav.path == '/admin/abnormal'} ? 'on'">異常出勤</a>
+            <a th:href="@{/admin/leaves}" th:classappend="${nav.path == '/admin/leaves'} ? 'on'">請假紀錄</a>
+            <a th:href="@{/admin/makeup}" th:classappend="${nav.path == '/admin/makeup'} ? 'on'">補打卡紀錄</a>
+          </div>
+        </details>
+
+        <!-- 人事與設定：員工、部門、日曆、編號規則 -->
+        <details class="menu">
+          <summary th:classappend="${nav.path.startsWith('/admin/employees') or nav.path == '/admin/departments' or nav.path == '/admin/calendar' or nav.path.startsWith('/admin/settings')} ? 'on'">人事與設定</summary>
+          <div class="menu-list">
+            <a th:href="@{/admin/employees}" th:classappend="${nav.path.startsWith('/admin/employees')} ? 'on'">員工管理</a>
+            <a th:href="@{/admin/departments}" th:classappend="${nav.path == '/admin/departments'} ? 'on'">部門</a>
+            <a th:href="@{/admin/calendar}" th:classappend="${nav.path == '/admin/calendar'} ? 'on'">辦公日曆／颱風假</a>
+            <a th:href="@{/admin/settings/employee-no}" th:classappend="${nav.path.startsWith('/admin/settings')} ? 'on'">員工編號規則</a>
+          </div>
+        </details>
       </th:block>
     </nav>
     <span th:text="${nav.name}">姓名</span>
@@ -25,6 +50,14 @@
   <div class="msg error" style="margin:0;border-radius:0;text-align:center" th:if="${nav.emailMissing}">
     你還沒有登記 Email，忘記密碼時將無法自行重設。請到<a th:href="@{/front/profile}">個人資料</a>填寫。
   </div>
+  <!-- 下拉選單：點選單外面或開另一個選單時，自動收起 -->
+  <script>
+    document.addEventListener('click', function (e) {
+      document.querySelectorAll('.bar details.menu[open]').forEach(function (d) {
+        if (!d.contains(e.target)) { d.removeAttribute('open'); }
+      });
+    });
+  </script>
 </th:block>
 </body>
 </html>

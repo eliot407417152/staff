@@ -16,5 +16,7 @@ public interface AttendanceRepository extends JpaRepository<AttendanceRecord, Lo
 
     List<AttendanceRecord> findByWorkDateOrderByClockInAsc(LocalDate workDate);
 
+    List<AttendanceRecord> findByEmployeeAndWorkDateBetween(Employee employee, LocalDate from, LocalDate to);
+
     List<AttendanceRecord> findByWorkDateBetween(LocalDate from, LocalDate to);
 }

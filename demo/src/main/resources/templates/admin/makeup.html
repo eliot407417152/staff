@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>補打卡紀錄 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+  <link rel="stylesheet" th:href="@{/css/leave.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap wide">
+    <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+    <p class="msg error" th:if="${error}" th:text="${error}"></p>
+
+    <section class="card">
+      <h2>補打卡紀錄</h2>
+      <div class="filters">
+        <a th:href="@{/admin/makeup}" th:classappend="${status == null} ? 'on'">全部</a>
+        <a th:href="@{/admin/makeup(status='PENDING')}" th:classappend="${status != null and status.name() == 'PENDING'} ? 'on'">審核中</a>
+        <a th:href="@{/admin/makeup(status='APPROVED')}" th:classappend="${status != null and status.name() == 'APPROVED'} ? 'on'">已核准</a>
+        <a th:href="@{/admin/makeup(status='REJECTED')}" th:classappend="${status != null and status.name() == 'REJECTED'} ? 'on'">已駁回</a>
+        <a th:href="@{/admin/makeup(status='CANCELLED')}" th:classappend="${status != null and status.name() == 'CANCELLED'} ? 'on'">已取消</a>
+        <a th:href="@{/admin/makeup(status='VOIDED')}" th:classappend="${status != null and status.name() == 'VOIDED'} ? 'on'">已註銷</a>
+      </div>
+      <p class="hint">「註銷」可撤銷已核准的補打卡（例如核准錯誤），打卡紀錄會還原成補打卡之前的樣子，並留下註銷人與原因。</p>
+      <p class="empty" th:if="${#lists.isEmpty(requests)}">沒有符合的紀錄。</p>
+      <div class="table-scroll" th:unless="${#lists.isEmpty(requests)}">
+        <table>
+          <thead>
+            <tr><th>申請人</th><th>日期</th><th>補上班</th><th>補下班</th><th>事由</th><th>狀態</th><th>審核人</th><th>意見</th><th>註銷</th></tr>
+          </thead>
+          <tbody>
+            <tr th:each="r : ${requests}">
+              <td th:text="${(r.employee.employeeNo != null ? r.employee.employeeNo + ' ' : '') + r.employee.name}">EMP20260001 王小明</td>
+              <td th:text="${r.workDate}">2026-11-12</td>
+              <td th:text="${r.clockInTime != null} ? ${#temporals.format(r.clockInTime, 'HH:mm')} : '-'">08:30</td>
+              <td th:text="${r.clockOutTime != null} ? ${#temporals.format(r.clockOutTime, 'HH:mm')} : '-'">17:30</td>
+              <td class="wrap-text" th:text="${r.reason}">事由</td>
+              <td><span class="badge" th:classappend="${'s-' + r.status.name().toLowerCase()}" th:text="${r.status.label}">審核中</span></td>
+              <td th:text="${r.decidedBy != null} ? ${r.decidedBy.name} : '-'">-</td>
+              <td class="wrap-text" th:text="${r.decisionComment != null} ? ${r.decisionComment} : '-'">-</td>
+              <td class="wrap-text">
+                <form class="decision" th:if="${r.status.name() == 'APPROVED'}"
+                      th:action="@{/admin/makeup/{id}/void(id=${r.id})}" method="post">
+                  <input name="reason" maxlength="200" placeholder="註銷原因（必填）" required>
+                  <button type="submit" class="secondary">註銷</button>
+                </form>
+                <span th:if="${r.status.name() == 'VOIDED'}"
+                      th:text="${(r.voidedBy != null ? r.voidedBy.name : '') + '：' + r.voidReason}">管理員：原因</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

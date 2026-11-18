@@ -87,11 +87,13 @@ public class TyphoonService {
     public static class Line {
         private final String employeeNo;
         private final String employeeName;
+        private final Long departmentId;
         private final Row row;
 
-        Line(String employeeNo, String employeeName, Row row) {
+        Line(String employeeNo, String employeeName, Long departmentId, Row row) {
             this.employeeNo = employeeNo;
             this.employeeName = employeeName;
+            this.departmentId = departmentId;
             this.row = row;
         }
     }
@@ -145,6 +147,7 @@ public class TyphoonService {
                 if (applies(e, t.getDate())) {
                     List<LeaveRequest> leaves = leavesByEmployee.getOrDefault(e.getId(), List.of());
                     out.add(new Line(e.getEmployeeNo() == null ? "-" : e.getEmployeeNo(), e.getName(),
+                            e.getDepartment() == null ? null : e.getDepartment().getId(),
                             new Row(t.getDate(), t.getNote(), classify(t.getDate(), leaves))));
                 }
             }

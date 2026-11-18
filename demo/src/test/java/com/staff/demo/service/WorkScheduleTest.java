@@ -118,6 +118,31 @@ class WorkScheduleTest {
     }
 
     @Test
+    void 整天請假但還是有打卡_不算異常() {
+        List<int[]> fullDay = leave(at(8, 30), at(17, 30));
+        // 只打上班卡沒打下班卡（過去的日子）
+        assertEquals(Status.ON_LEAVE, eval(at(8, 30), null, fullDay).status());
+        // 有上下班卡
+        DayResult r = eval(at(9, 0), at(11, 0), fullDay);
+        assertEquals(Status.ON_LEAVE, r.status());
+        assertEquals(0, r.shortfallMinutes());
+    }
+
+    @Test
+    void 下午請假直接離開沒打下班卡_以請假開始時間當下班() {
+        // 8:30 到班，14:00–17:30 請假：8:30–14:00 扣午休 = 270 分鐘，加請假 210 分鐘 = 480
+        assertEquals(Status.NORMAL, eval(at(8, 30), null, leave(at(14, 0), at(17, 30))).status());
+        // 9:00 才到：只有 240 + 210 = 450，差 30 分鐘
+        DayResult r = eval(at(9, 0), null, leave(at(14, 0), at(17, 30)));
+        assertEquals(Status.SHORT, r.status());
+        assertEquals(30, r.shortfallMinutes());
+        // 沒有請假就還是「未打下班卡」
+        assertEquals(Status.MISSING_OUT, eval(at(8, 30), null, List.of()).status());
+        // 請的是中間時段（沒請到下班），沒打下班卡仍是異常
+        assertEquals(Status.MISSING_OUT, eval(at(8, 30), null, leave(at(10, 0), at(12, 0))).status());
+    }
+
+    @Test
     void 今天上班中_算出最早可下班時間() {
         LocalDate today = LocalDate.of(2026, 11, 20);
         LocalDateTime now = today.atTime(10, 0);

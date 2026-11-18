@@ -24,6 +24,11 @@ public class AttendanceDayView {
     /** 今天最早可下班的時間（上班中才有） */
     private final LocalTime earliestOut;
 
+    /** 星期幾（週一～週日） */
+    public String getWeekday() {
+        return workDate.getDayOfWeek().getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.TAIWAN);
+    }
+
     public AttendanceDayView(LocalDate workDate, LocalDateTime clockIn, LocalDateTime clockOut,
                              String worked, String leave, String shortfall,
                              String statusLabel, String statusBadge, LocalTime earliestOut) {

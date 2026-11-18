@@ -123,10 +123,17 @@ public final class WorkSchedule {
         int leaveMin = total(leave);
         boolean open = !date.isBefore(now.toLocalDate());
 
-        if (clockIn == null) {
-            if (leaveMin >= REQUIRED_MINUTES) {
-                return new DayResult(Status.ON_LEAVE, 0, leaveMin, 0, null);
+        // 整天請假（已核准）：就算當天還是有打卡，也不算異常，一律視為「請假」
+        if (leaveMin >= REQUIRED_MINUTES) {
+            int worked = 0;
+            if (clockIn != null && clockOut != null) {
+                int inMin = Math.max(minutesFromDayStart(date, clockIn), FLEX_EARLIEST_MIN);
+                worked = counted(inMin, minutesFromDayStart(date, clockOut), leave);
             }
+            return new DayResult(Status.ON_LEAVE, worked, leaveMin, 0, null);
+        }
+
+        if (clockIn == null) {
             return open
                     ? new DayResult(Status.NOT_YET, 0, leaveMin, 0, null)
                     : new DayResult(Status.ABSENT, 0, leaveMin, REQUIRED_MINUTES - leaveMin, null);
@@ -139,12 +146,29 @@ public final class WorkSchedule {
                 int soFar = counted(in, minutesFromDayStart(date, now), leave);
                 return new DayResult(Status.IN_PROGRESS, soFar, leaveMin, 0, earliestOut(in, leave, leaveMin));
             }
+            // 過去的日子沒打下班卡：如果請假一路請到下班時間（例如下午請假直接離開），
+            // 就以「請假開始的時間」當作下班時間計算，不算漏打卡
+            Integer leaveStart = trailingLeaveStart(leave);
+            if (leaveStart != null) {
+                int worked = counted(in, leaveStart, leave);
+                int shortfall = Math.max(0, REQUIRED_MINUTES - worked - leaveMin);
+                return new DayResult(shortfall == 0 ? Status.NORMAL : Status.SHORT, worked, leaveMin, shortfall, null);
+            }
             return new DayResult(Status.MISSING_OUT, 0, leaveMin, 0, null);
         }
 
         int worked = counted(in, minutesFromDayStart(date, clockOut), leave);
         int shortfall = Math.max(0, REQUIRED_MINUTES - worked - leaveMin);
         return new DayResult(shortfall == 0 ? Status.NORMAL : Status.SHORT, worked, leaveMin, shortfall, null);
+    }
+
+    /** 請假是否一路請到標準下班時間；是的話回傳該段請假的開始分鐘，否則 null。 */
+    static Integer trailingLeaveStart(List<int[]> leave) {
+        if (leave.isEmpty()) {
+            return null;
+        }
+        int[] last = leave.get(leave.size() - 1);
+        return last[1] >= minuteOf(STANDARD_END) ? last[0] : null;
     }
 
     /** 從 in 開始，扣掉午休與請假時段後，要到幾點才湊滿 8 小時（含請假時數）。算不出來回傳 null。 */

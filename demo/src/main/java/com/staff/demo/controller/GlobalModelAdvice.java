@@ -2,6 +2,7 @@ package com.staff.demo.controller;
 
 import com.staff.demo.entity.Employee;
 import com.staff.demo.repository.EmployeeRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -32,11 +33,13 @@ public class GlobalModelAdvice {
         private final boolean canApprove;
         /** 尚未登記 Email：顯示提醒橫幅 */
         private final boolean emailMissing;
+        /** 目前頁面的路徑，導覽列用來標示「你在這裡」 */
+        private final String path;
     }
 
     /** 讓每個頁面都能用 ${nav.name}、${nav.admin}、${nav.canApprove} 畫出導覽列 */
     @ModelAttribute("nav")
-    public NavInfo nav(Authentication auth) {
+    public NavInfo nav(Authentication auth, HttpServletRequest request) {
         if (auth == null || auth instanceof AnonymousAuthenticationToken) {
             return null;
         }
@@ -45,7 +48,8 @@ public class GlobalModelAdvice {
                 .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
         boolean canApprove = admin || (me != null && employeeRepo.existsByManager(me));
         boolean emailMissing = me != null && (me.getEmail() == null || me.getEmail().isBlank());
-        return new NavInfo(me == null ? auth.getName() : me.getName(), admin, canApprove, emailMissing);
+        String path = request.getServletPath() == null ? "" : request.getServletPath();
+        return new NavInfo(me == null ? auth.getName() : me.getName(), admin, canApprove, emailMissing, path);
     }
 
     /** API：@Valid @RequestBody 驗證失敗，回傳 400 與中文錯誤清單 */

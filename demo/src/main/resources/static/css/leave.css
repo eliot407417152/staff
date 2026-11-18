@@ -8,3 +8,9 @@ td.wrap-text { white-space: normal; min-width: 11rem; }
 .decision button { padding: .35rem .8rem; }
 .filters { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
 .filters a.on { font-weight: 700; color: var(--ink); text-decoration: none; }
+
+/* 異常出勤：篩選列 */
+.filter-form { display: flex; flex-wrap: wrap; gap: 0 1rem; align-items: flex-end; margin-bottom: .5rem; }
+.filter-form > div { min-width: 10rem; }
+.filter-form button { margin-bottom: 0; }
+.badge.s-voided { background: #eceff1; color: var(--muted); text-decoration: line-through; }
