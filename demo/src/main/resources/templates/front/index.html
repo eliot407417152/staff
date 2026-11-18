@@ -6,12 +6,15 @@
   <title>打卡 - 員工系統</title>
   <link rel="stylesheet" th:href="@{/css/app.css}">
   <link rel="stylesheet" th:href="@{/css/forms.css}">
+  <link rel="stylesheet" th:href="@{/css/leave.css}">
 </head>
 <body>
   <header th:replace="~{fragments/nav :: bar}"></header>
 
   <main class="wrap">
     <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+
+    <p class="msg" style="background:#eef2f4" th:text="${notice}">彈性上班說明</p>
 
     <section class="card">
       <h2>今天 <span th:text="${#temporals.format(#temporals.createToday(), 'yyyy/MM/dd')}">2026/01/01</span></h2>
@@ -24,7 +27,17 @@
           <dt>下班</dt>
           <dd th:text="${todayRecord != null and todayRecord.clockOut != null} ? ${#temporals.format(todayRecord.clockOut, 'HH:mm:ss')} : '尚未打卡'">--</dd>
         </div>
+        <div th:if="${today.earliestOut != null}">
+          <dt>最早可下班</dt>
+          <dd th:text="${#temporals.format(today.earliestOut, 'HH:mm')}">17:30</dd>
+        </div>
       </dl>
+      <p class="hint" th:if="${todayRecord != null}">
+        狀態：<span class="badge" th:classappend="${today.statusBadge}" th:text="${today.statusLabel}">上班中</span>
+        　已上班 <span th:text="${today.worked}">0:00</span>（已扣午休）
+        <span th:if="${today.leave != '0:00' and today.leave != '-'}">，已核准請假 <span th:text="${today.leave}">0:00</span></span>
+        <span th:if="${today.shortfall != null}">，還差 <span th:text="${today.shortfall}">0:00</span> 滿 8 小時</span>
+      </p>
       <div class="actions">
         <form th:action="@{/front/clock-in}" method="post">
           <button type="submit" th:disabled="${todayRecord != null}">上班打卡</button>
@@ -40,12 +53,18 @@
       <p class="empty" th:if="${#lists.isEmpty(records)}">還沒有打卡紀錄。</p>
       <div class="table-scroll" th:unless="${#lists.isEmpty(records)}">
         <table>
-          <thead><tr><th>日期</th><th>上班</th><th>下班</th></tr></thead>
+          <thead><tr><th>日期</th><th>上班</th><th>下班</th><th>實際工時</th><th>請假</th><th>狀態</th></tr></thead>
           <tbody>
             <tr th:each="r : ${records}">
               <td th:text="${r.workDate}">2026-01-01</td>
-              <td th:text="${#temporals.format(r.clockIn, 'HH:mm:ss')}">09:00:00</td>
-              <td th:text="${r.clockOut != null} ? ${#temporals.format(r.clockOut, 'HH:mm:ss')} : '-'">18:00:00</td>
+              <td th:text="${r.clockIn != null} ? ${#temporals.format(r.clockIn, 'HH:mm:ss')} : '-'">08:30:00</td>
+              <td th:text="${r.clockOut != null} ? ${#temporals.format(r.clockOut, 'HH:mm:ss')} : '-'">17:30:00</td>
+              <td th:text="${r.worked}">8:00</td>
+              <td th:text="${r.leave}">0:00</td>
+              <td>
+                <span class="badge" th:classappend="${r.statusBadge}" th:text="${r.statusLabel}">正常</span>
+                <span th:if="${r.shortfall != null}" th:text="${'差 ' + r.shortfall}"></span>
+              </td>
             </tr>
           </tbody>
         </table>

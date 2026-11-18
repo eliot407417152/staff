@@ -52,9 +52,32 @@
         </div>
         <label for="reason">事由</label>
         <input th:field="*{reason}" maxlength="200" required>
-        <p class="hint">上班時間 09:00–18:00，午休 12:00–13:00 與週末不計入請假時數；國定假日目前不會自動排除。</p>
+        <p class="hint">上班時間 08:30–17:30，午休 12:00–13:00、週末、國定假日（依政府辦公日曆表）與颱風假不計入請假時數。</p>
         <div class="form-actions"><button type="submit">送出申請</button></div>
       </form>
+    </section>
+
+    <section class="card" th:unless="${#lists.isEmpty(typhoons)}">
+      <h2>颱風假（停班日）</h2>
+      <p class="hint">颱風假公司不支薪，算異常出勤：可以用特休補上（需主管核准，照常給薪）；沒有補上的視為天災假，每天扣薪 8 小時。</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>日期</th><th>說明</th><th>處理狀況</th><th>扣薪時數</th><th></th></tr></thead>
+          <tbody>
+            <tr th:each="t : ${typhoons}">
+              <td th:text="${t.date}">2026-11-12</td>
+              <td th:text="${t.note != ''} ? ${t.note} : '-'">颱風停班</td>
+              <td><span class="badge" th:classappend="${t.handlingBadge}" th:text="${t.handlingLabel}">天災假</span></td>
+              <td th:text="${t.deductHours}">8.0</td>
+              <td>
+                <form th:if="${t.coverable}" th:action="@{/front/leaves/typhoon/{d}/annual(d=${t.date})}" method="post">
+                  <button type="submit" class="secondary">用特休補上</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="card">

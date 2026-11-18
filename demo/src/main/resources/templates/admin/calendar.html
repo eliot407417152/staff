@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>辦公日曆/颱風假 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+  <link rel="stylesheet" th:href="@{/css/leave.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap wide">
+    <p class="msg ok" th:if="${message}" th:text="${message}"></p>
+    <p class="msg error" th:if="${error}" th:text="${error}"></p>
+
+    <section class="card">
+      <h2>颱風假登記</h2>
+      <p class="hint">颱風假公司不支薪。登記後，員工可選擇用特休補上；沒有補上的視為天災假，每天扣薪 8 小時（可在「異常出勤」查看）。</p>
+      <form th:action="@{/admin/calendar/typhoon}" method="post">
+        <div class="grid2">
+          <div><label for="date">颱風假日期</label><input type="date" id="date" name="date" required></div>
+          <div><label for="note">說明（選填）</label><input id="note" name="note" maxlength="100" placeholder="例：○○颱風，全市停班"></div>
+        </div>
+        <div class="form-actions"><button type="submit">登記颱風假</button></div>
+      </form>
+
+      <p class="empty" th:if="${#lists.isEmpty(typhoons)}" style="margin-top:1rem">目前沒有登記任何颱風假。</p>
+      <div class="table-scroll" th:unless="${#lists.isEmpty(typhoons)}" style="margin-top:1rem">
+        <table>
+          <thead><tr><th>日期</th><th>說明</th><th>登記人</th><th></th></tr></thead>
+          <tbody>
+            <tr th:each="t : ${typhoons}">
+              <td th:text="${t.date}">2026-11-12</td>
+              <td th:text="${t.note != null} ? ${t.note} : '-'">說明</td>
+              <td th:text="${t.createdBy != null} ? ${t.createdBy} : '-'">admin</td>
+              <td>
+                <form th:action="@{/admin/calendar/typhoon/{d}/delete(d=${t.date})}" method="post"
+                      onsubmit="return confirm('確定要取消這天的颱風假登記嗎？');">
+                  <button type="submit" class="secondary">取消登記</button>
+                </form>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>政府辦公日曆表（國定假日）</h2>
+      <p class="hint">
+        資料來源：政府資料開放平臺「中華民國政府行政機關辦公日曆表」（data.gov.tw/dataset/14718）。
+        請假時數、出勤工時都會依這份日曆排除國定假日；沒有資料的日期，以週一至週五為上班日。
+      </p>
+      <p class="msg error" th:if="${rowCount == 0}">
+        <span th:text="${year}">2026</span> 年還沒有日曆資料，請按「從網路同步」或上傳 CSV，否則國定假日會被當成上班日。
+      </p>
+      <p th:unless="${rowCount == 0}">
+        <span th:text="${year}">2026</span> 年已匯入 <strong th:text="${rowCount}">365</strong> 天資料。
+      </p>
+
+      <div class="actions">
+        <form th:action="@{/admin/calendar/sync}" method="post">
+          <button type="submit">從網路同步</button>
+        </form>
+      </div>
+
+      <form th:action="@{/admin/calendar/import(_csrf=${_csrf.token})}" method="post" enctype="multipart/form-data">
+        <label for="file">或上傳從平臺下載的 CSV（一般版，欄位：西元日期、星期、是否放假、備註）</label>
+        <input type="file" id="file" name="file" accept=".csv,text/csv" required>
+        <div class="form-actions"><button type="submit" class="secondary">上傳並匯入</button></div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2><span th:text="${year}">2026</span> 年放假與補班日</h2>
+      <div class="filters">
+        <a th:href="@{/admin/calendar(year=${year - 1})}">上一年</a>
+        <a th:href="@{/admin/calendar(year=${year + 1})}">下一年</a>
+      </div>
+      <p class="empty" th:if="${#lists.isEmpty(specialDays)}">沒有資料。</p>
+      <div class="table-scroll" th:unless="${#lists.isEmpty(specialDays)}">
+        <table>
+          <thead><tr><th>日期</th><th>星期</th><th>類型</th><th>備註</th></tr></thead>
+          <tbody>
+            <tr th:each="d : ${specialDays}">
+              <td th:text="${d.date}">2026-01-01</td>
+              <td th:text="${#temporals.dayOfWeekNameShort(d.date)}">四</td>
+              <td th:text="${d.holiday} ? '平日放假' : '假日補班'">平日放假</td>
+              <td th:text="${d.note != null and d.note != ''} ? ${d.note} : '-'">開國紀念日</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

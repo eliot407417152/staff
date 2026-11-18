@@ -23,7 +23,9 @@ public class FrontController {
         String username = auth.getName();
         model.addAttribute("employee", service.getEmployee(username));
         model.addAttribute("todayRecord", service.findToday(username).orElse(null));
-        model.addAttribute("records", service.recent(username));
+        model.addAttribute("today", service.todayView(username));
+        model.addAttribute("notice", service.todayNotice());
+        model.addAttribute("records", service.recentViews(username));
         return "front/index";
     }
 

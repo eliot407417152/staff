@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>異常出勤 - 員工系統</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <link rel="stylesheet" th:href="@{/css/forms.css}">
+  <link rel="stylesheet" th:href="@{/css/leave.css}">
+</head>
+<body>
+  <header th:replace="~{fragments/nav :: bar}"></header>
+
+  <main class="wrap wide">
+    <section class="card">
+      <h2>異常出勤 <span th:text="${month}">2026-11</span></h2>
+      <div class="filters">
+        <a th:href="@{/admin/abnormal(month=${prevMonth})}">上個月</a>
+        <a th:href="@{/admin/abnormal(month=${nextMonth})}">下個月</a>
+      </div>
+      <p class="hint">規則：彈性上班 08:00–09:00，不論幾點到，每天需上滿 8 小時（午休 12:00–13:00 不計，已核准的請假時數可抵扣）。</p>
+    </section>
+
+    <section class="card">
+      <h2>颱風假（不支薪）</h2>
+      <p class="empty" th:if="${#lists.isEmpty(typhoonLines)}">這個月沒有颱風假。</p>
+
+      <div th:unless="${#lists.isEmpty(typhoonSummaries)}">
+        <h3>本月需扣薪合計（天災假）</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>員工編號</th><th>姓名</th><th>天數</th><th>扣薪時數</th></tr></thead>
+            <tbody>
+              <tr th:each="s : ${typhoonSummaries}">
+                <td th:text="${s.employeeNo}">EMP20260001</td>
+                <td th:text="${s.employeeName}">王小明</td>
+                <td th:text="${s.days}">1</td>
+                <td th:text="${s.deductHours}">8.0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div th:unless="${#lists.isEmpty(typhoonLines)}" style="margin-top:1rem">
+        <h3>明細</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>日期</th><th>員工編號</th><th>姓名</th><th>處理狀況</th><th>扣薪時數</th></tr></thead>
+            <tbody>
+              <tr th:each="l : ${typhoonLines}">
+                <td th:text="${l.row.date}">2026-11-12</td>
+                <td th:text="${l.employeeNo}">EMP20260001</td>
+                <td th:text="${l.employeeName}">王小明</td>
+                <td><span class="badge" th:classappend="${l.row.handlingBadge}" th:text="${l.row.handlingLabel}">天災假</span></td>
+                <td th:text="${l.row.deductHours}">8.0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>工時不足／未打卡</h2>
+      <p class="empty" th:if="${#lists.isEmpty(abnormal)}">這個月（到今天為止）沒有異常。</p>
+      <div class="table-scroll" th:unless="${#lists.isEmpty(abnormal)}">
+        <table>
+          <thead>
+            <tr><th>日期</th><th>員工編號</th><th>姓名</th><th>上班</th><th>下班</th><th>實際工時</th><th>請假</th><th>短少</th><th>狀態</th></tr>
+          </thead>
+          <tbody>
+            <tr th:each="r : ${abnormal}">
+              <td th:text="${r.date}">2026-11-12</td>
+              <td th:text="${r.employeeNo}">EMP20260001</td>
+              <td th:text="${r.employeeName}">王小明</td>
+              <td th:text="${r.clockIn != null} ? ${#temporals.format(r.clockIn, 'HH:mm')} : '-'">-</td>
+              <td th:text="${r.clockOut != null} ? ${#temporals.format(r.clockOut, 'HH:mm')} : '-'">-</td>
+              <td th:text="${r.worked}">7:30</td>
+              <td th:text="${r.leave}">0:00</td>
+              <td th:text="${r.shortfall}">0:30</td>
+              <td><span class="badge" th:classappend="${r.statusBadge}" th:text="${r.statusLabel}">工時不足</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

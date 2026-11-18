@@ -14,11 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.DayOfWeek;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -29,11 +26,8 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class LeaveService {
 
-    // 上班時間：09:00–12:00、13:00–18:00（每天 8 小時），週六日不計
-    private static final LocalTime AM_START = LocalTime.of(9, 0);
-    private static final LocalTime AM_END = LocalTime.of(12, 0);
-    private static final LocalTime PM_START = LocalTime.of(13, 0);
-    private static final LocalTime PM_END = LocalTime.of(18, 0);
+    // 上班時間規則（08:30–12:00、13:00–17:30，每天 8 小時）見 WorkSchedule；
+    // 週六日、國定假日、颱風假不計請假時數，見 WorkCalendarService。
 
     private static final List<LeaveRequest.Status> ACTIVE =
             List.of(LeaveRequest.Status.PENDING, LeaveRequest.Status.APPROVED);
@@ -57,6 +51,7 @@ public class LeaveService {
     private final LeaveTypeRepository typeRepo;
     private final EmployeeRepository employeeRepo;
     private final MailService mailService;
+    private final WorkCalendarService calendar;
 
     // ===================== 查詢 =====================
 
@@ -148,7 +143,8 @@ public class LeaveService {
         }
         int minutes = calcMinutes(start, end);
         if (minutes <= 0) {
-            throw new IllegalArgumentException("所選時段不含上班時間（週末與午休時間不計入請假）");
+            throw new IllegalArgumentException("所選時段不含上班時間（週末、國定假日、颱風假與午休時間不計入請假）。"
+                    + "若是颱風假要用特休補上，請使用「颱風假」區塊的按鈕");
         }
         if (requestRepo.countOverlap(e, ACTIVE, start, end) > 0) {
             throw new IllegalArgumentException("這段時間已有審核中或已核准的請假申請");
@@ -162,6 +158,41 @@ public class LeaveService {
         r.setEndAt(end);
         r.setMinutes(minutes);
         r.setReason(f.getReason().trim());
+        requestRepo.save(r);
+        notifyManager(r);
+        return r;
+    }
+
+    /**
+     * 颱風假（停班日）用特休補上：建立一筆該日整天（8 小時）的特休申請，仍由主管審核。
+     * 沒有補上的颱風假視為天災假，不支薪。
+     */
+    @Transactional
+    public LeaveRequest applyTyphoonCover(String username, LocalDate date) {
+        Employee e = employee(username);
+        if (!calendar.isTyphoonDay(date)) {
+            throw new IllegalArgumentException("這一天不是颱風假");
+        }
+        if (e.getHireDate() != null && e.getHireDate().isAfter(date)) {
+            throw new IllegalArgumentException("到職日之前的颱風假不需要處理");
+        }
+        LeaveType type = typeRepo.findByCode(ANNUAL_CODE).filter(LeaveType::isActive)
+                .orElseThrow(() -> new IllegalArgumentException("系統找不到特休假別，請聯絡管理員"));
+        LocalDateTime start = date.atTime(WorkSchedule.STANDARD_START);
+        LocalDateTime end = date.atTime(WorkSchedule.STANDARD_END);
+        if (requestRepo.countOverlap(e, ACTIVE, start, end) > 0) {
+            throw new IllegalArgumentException("這一天已有審核中或已核准的請假申請；"
+                    + "若是跨日請假，請先取消再分開申請");
+        }
+        checkQuota(e, type, start, WorkSchedule.REQUIRED_MINUTES);
+
+        LeaveRequest r = new LeaveRequest();
+        r.setEmployee(e);
+        r.setLeaveType(type);
+        r.setStartAt(start);
+        r.setEndAt(end);
+        r.setMinutes(WorkSchedule.REQUIRED_MINUTES);
+        r.setReason("颱風假（停班日）以特休補上");
         requestRepo.save(r);
         notifyManager(r);
         return r;
@@ -257,23 +288,13 @@ public class LeaveService {
 
     // ===================== 工具 =====================
 
-    /** 計算實際請假分鐘數：只算上班時段，排除午休與週六日（國定假日目前不會自動排除） */
-    public static int calcMinutes(LocalDateTime start, LocalDateTime end) {
-        long total = 0;
-        for (LocalDate d = start.toLocalDate(); !d.isAfter(end.toLocalDate()); d = d.plusDays(1)) {
-            if (d.getDayOfWeek() == DayOfWeek.SATURDAY || d.getDayOfWeek() == DayOfWeek.SUNDAY) {
-                continue;
-            }
-            total += overlap(start, end, d.atTime(AM_START), d.atTime(AM_END));
-            total += overlap(start, end, d.atTime(PM_START), d.atTime(PM_END));
-        }
-        return (int) total;
-    }
-
-    private static long overlap(LocalDateTime s, LocalDateTime e, LocalDateTime a, LocalDateTime b) {
-        LocalDateTime from = s.isAfter(a) ? s : a;
-        LocalDateTime to = e.isBefore(b) ? e : b;
-        return to.isAfter(from) ? Duration.between(from, to).toMinutes() : 0;
+    /**
+     * 計算實際請假分鐘數：只算上班時段（08:30–12:00、13:00–17:30），
+     * 排除午休，以及週六日、國定假日（辦公日曆表）、颱風假。
+     */
+    public int calcMinutes(LocalDateTime start, LocalDateTime end) {
+        WorkCalendarService.Days days = calendar.days(start.toLocalDate(), end.toLocalDate());
+        return WorkSchedule.leaveMinutes(start, end, days::isWorkday);
     }
 
     private static String fmt(long minutes) {

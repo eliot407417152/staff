@@ -35,4 +35,16 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
     Long sumMinutes(@Param("e") Employee e, @Param("t") LeaveType t,
                     @Param("st") Collection<LeaveRequest.Status> st,
                     @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** 某人在這段時間內有重疊的請假（指定狀態） */
+    @Query("select r from LeaveRequest r join fetch r.leaveType where r.employee = :e and r.status in :st "
+            + "and r.startAt < :end and r.endAt > :start")
+    List<LeaveRequest> findOverlapping(@Param("e") Employee e, @Param("st") Collection<LeaveRequest.Status> st,
+                                       @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    /** 所有人在這段時間內有重疊的請假（指定狀態），供後台報表使用 */
+    @Query("select r from LeaveRequest r join fetch r.leaveType join fetch r.employee where r.status in :st "
+            + "and r.startAt < :end and r.endAt > :start")
+    List<LeaveRequest> findAllOverlapping(@Param("st") Collection<LeaveRequest.Status> st,
+                                          @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }
