@@ -14,10 +14,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.TextStyle;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -46,6 +49,10 @@ public class LeaveService {
 
     public record BalanceView(String leaveType, String quotaHours, String approvedHours,
                               String pendingHours, String period) {}
+
+    /** 請假試算結果：預計結束時間、時數、額度，以及要提醒申請人的事項（不寫入資料庫） */
+    public record LeavePlan(LeaveType type, LocalDateTime start, LocalDateTime end, int minutes,
+                            String summary, String quotaNote, String notice) {}
 
     private final LeaveRequestRepository requestRepo;
     private final LeaveTypeRepository typeRepo;
@@ -127,40 +134,114 @@ public class LeaveService {
 
     // ===================== 申請、取消 =====================
 
-    @Transactional
-    public LeaveRequest apply(String username, LeaveRequestForm f) {
+    /**
+     * 請假流程：先決定假別與時數，再選開始日期與時間，由系統算出結束時間。
+     * 這裡做完所有檢查但不寫入資料庫；畫面上的「試算」與正式送出走同一套規則。
+     */
+    @Transactional(readOnly = true)
+    public LeavePlan plan(String username, LeaveRequestForm f) {
         Employee e = employee(username);
         LeaveType type = typeRepo.findById(f.getLeaveTypeId()).filter(LeaveType::isActive)
                 .orElseThrow(() -> new IllegalArgumentException("請選擇有效的假別"));
-        LocalDateTime start = f.getStartAt();
-        LocalDateTime end = f.getEndAt();
+        int minutes = toMinutes(f.getHours());
 
-        if (!end.isAfter(start)) {
-            throw new IllegalArgumentException("結束時間必須晚於開始時間");
+        String timeError = WorkSchedule.validateLeaveStartTime(f.getStartTime());
+        if (timeError != null) {
+            throw new IllegalArgumentException(timeError);
         }
-        if (ChronoUnit.DAYS.between(start.toLocalDate(), end.toLocalDate()) > 90) {
-            throw new IllegalArgumentException("單次請假不可超過 90 天");
+        LocalDate date = f.getStartDate();
+        if (e.getHireDate() != null && date.isBefore(e.getHireDate())) {
+            throw new IllegalArgumentException("開始日期不能早於到職日（" + e.getHireDate() + "）");
         }
-        int minutes = calcMinutes(start, end);
-        if (minutes <= 0) {
-            throw new IllegalArgumentException("所選時段不含上班時間（週末、國定假日、颱風假與午休時間不計入請假）。"
-                    + "若是颱風假要用特休補上，請使用「颱風假」區塊的按鈕");
+        WorkCalendarService.Days days = calendar.days(date, date.plusDays(120));
+        if (!days.isWorkday(date)) {
+            throw new IllegalArgumentException(offDayMessage(date, days));
+        }
+        LocalDateTime start = date.atTime(f.getStartTime());
+
+        // 一天以內的請假要在同一天內請完，避免不小心延到隔天
+        int left = WorkSchedule.minutesLeftInDay(start);
+        if (minutes <= WorkSchedule.REQUIRED_MINUTES && minutes > left) {
+            throw new IllegalArgumentException(String.format(Locale.ROOT,
+                    "從 %s 開始，當天只剩 %s 小時可以請。請把開始時間提早，或把時數改成 %s 小時以內",
+                    f.getStartTime(), fmt(left), fmt(left)));
+        }
+        LocalDateTime end = WorkSchedule.leaveEnd(start, minutes, days::isWorkday);
+        if (end == null || ChronoUnit.DAYS.between(date, end.toLocalDate()) > 90) {
+            throw new IllegalArgumentException("單次請假不可超過 90 天，請分開申請");
         }
         if (requestRepo.countOverlap(e, ACTIVE, start, end) > 0) {
-            throw new IllegalArgumentException("這段時間已有審核中或已核准的請假申請");
+            throw new IllegalArgumentException("這段時間（" + label(start) + " ～ " + label(end)
+                    + "）已有審核中或已核准的請假申請");
         }
-        checkQuota(e, type, start, minutes);
+        QuotaState q = quotaState(e, type, start);
+        assertWithinQuota(q, minutes);
 
+        String quotaNote = q.quota() == null
+                ? type.getName() + "不限額度"
+                : String.format(Locale.ROOT, "%s額度 %s 小時，已使用或審核中 %s 小時，這筆核准後剩 %s 小時",
+                        q.scope(), fmt(q.quota()), fmt(q.used()), fmt(q.quota() - q.used() - minutes));
+        List<String> notes = new ArrayList<>();
+        if (start.isBefore(LocalDateTime.now())) {
+            notes.add("開始時間已經過了，這是事後補請假。");
+        }
+        if (!end.toLocalDate().equals(date)) {
+            notes.add("跨日請假：第一天從開始時間算起，之後每天從 08:30 接續。");
+        }
+        String summary = String.format(Locale.ROOT, "%s ～ %s，共 %s 小時（已扣除午休與非上班日）",
+                label(start), end.toLocalDate().equals(date) ? end.toLocalTime().toString() : label(end), fmt(minutes));
+        return new LeavePlan(type, start, end, minutes, summary, quotaNote,
+                notes.isEmpty() ? null : String.join(" ", notes));
+    }
+
+    @Transactional
+    public LeaveRequest apply(String username, LeaveRequestForm f) {
+        LeavePlan p = plan(username, f);
+        if (calcMinutes(p.start(), p.end()) != p.minutes()) {
+            throw new IllegalStateException("請假時數計算不一致，請聯絡管理員");
+        }
         LeaveRequest r = new LeaveRequest();
-        r.setEmployee(e);
-        r.setLeaveType(type);
-        r.setStartAt(start);
-        r.setEndAt(end);
-        r.setMinutes(minutes);
+        r.setEmployee(employee(username));
+        r.setLeaveType(p.type());
+        r.setStartAt(p.start());
+        r.setEndAt(p.end());
+        r.setMinutes(p.minutes());
         r.setReason(f.getReason().trim());
         requestRepo.save(r);
         notifyManager(r);
         return r;
+    }
+
+    /** 時數必須是 0.5 小時的倍數 */
+    private static int toMinutes(BigDecimal hours) {
+        BigDecimal m = hours.multiply(BigDecimal.valueOf(60));
+        if (m.remainder(BigDecimal.valueOf(WorkSchedule.LEAVE_STEP_MINUTES)).signum() != 0) {
+            throw new IllegalArgumentException("請假時數必須是 0.5 小時的倍數（例如 1、1.5、4、8）");
+        }
+        return m.intValueExact();
+    }
+
+    /** 開始日不是上班日時，說明原因並指出下一個上班日 */
+    private String offDayMessage(LocalDate date, WorkCalendarService.Days days) {
+        String reason = days.offReason(date);
+        LocalDate next = date;
+        for (int i = 0; i < 60; i++) {
+            next = next.plusDays(1);
+            if (days.isWorkday(next)) {
+                break;
+            }
+        }
+        String msg = date + "（" + dow(date) + "）是" + reason + "，不是上班日，不能當請假的開始日。"
+                + "下一個上班日是 " + next + "（" + dow(next) + "）";
+        return "颱風假".equals(reason) ? msg + "；颱風假請在下方「颱風假」區塊用特休補上" : msg;
+    }
+
+    private static String label(LocalDateTime t) {
+        return t.toLocalDate() + "（" + dow(t.toLocalDate()) + "）" + t.toLocalTime();
+    }
+
+    private static String dow(LocalDate d) {
+        return d.getDayOfWeek().getDisplayName(TextStyle.SHORT, Locale.TAIWAN);
     }
 
     /**
@@ -248,8 +329,11 @@ public class LeaveService {
         return r;
     }
 
-    /** 檢查額度：特休依到職日按週年計算（勞基法第 38 條），其他假別依年度上限 */
-    private void checkQuota(Employee e, LeaveType type, LocalDateTime start, int minutes) {
+    /** 額度狀況：quota 為 null 代表不限 */
+    private record QuotaState(Long quota, long used, String scope) {}
+
+    /** 特休依到職日按週年計算（勞基法第 38 條），其他假別依年度上限 */
+    private QuotaState quotaState(Employee e, LeaveType type, LocalDateTime start) {
         long quota;
         LocalDateTime from;
         LocalDateTime to;
@@ -267,19 +351,26 @@ public class LeaveService {
             scope = "特休（" + ent.start() + " ～ " + ent.endExclusive().minusDays(1) + "）";
         } else {
             if (type.getAnnualQuotaMinutes() == null) {
-                return;
+                return new QuotaState(null, 0, type.getName());
             }
             quota = type.getAnnualQuotaMinutes();
             from = LocalDate.of(start.getYear(), 1, 1).atStartOfDay();
             to = from.plusYears(1);
             scope = type.getName() + "年度";
         }
-        long used = requestRepo.sumMinutes(e, type, ACTIVE, from, to);
-        if (used + minutes > quota) {
+        return new QuotaState(quota, requestRepo.sumMinutes(e, type, ACTIVE, from, to), scope);
+    }
+
+    private void assertWithinQuota(QuotaState q, int minutes) {
+        if (q.quota() != null && q.used() + minutes > q.quota()) {
             throw new IllegalArgumentException(String.format(Locale.ROOT,
                     "%s額度 %s 小時，已使用或審核中 %s 小時，本次申請 %s 小時，超過額度",
-                    scope, fmt(quota), fmt(used), fmt(minutes)));
+                    q.scope(), fmt(q.quota()), fmt(q.used()), fmt(minutes)));
         }
+    }
+
+    private void checkQuota(Employee e, LeaveType type, LocalDateTime start, int minutes) {
+        assertWithinQuota(quotaState(e, type, start), minutes);
     }
 
     private static boolean isAnnual(LeaveType t) {

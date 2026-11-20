@@ -14,3 +14,18 @@ td.wrap-text { white-space: normal; min-width: 11rem; }
 .filter-form > div { min-width: 10rem; }
 .filter-form button { margin-bottom: 0; }
 .badge.s-voided { background: #eceff1; color: var(--muted); text-decoration: line-through; }
+
+/* 請假申請：先選時數，再選開始時間，下方即時顯示結束時間與檢查結果 */
+.leave-steps { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: 1rem; }
+.leave-steps > li { padding: 1rem; border: 1px solid var(--line); border-radius: 8px; }
+.leave-steps > li > label, .leave-steps .step-title { display: block; margin-top: 0; font-weight: 600; }
+.quick { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+.quick button { padding: .3rem .8rem; }
+.preview-box { border-radius: 8px; padding: .75rem 1rem; margin: 0 0 1rem; background: #eef2f4; color: var(--muted); }
+.preview-box p { margin: 0; }
+.preview-box p + p { margin-top: .25rem; }
+.preview-box[data-state="ok"] { background: #e6f4ec; color: var(--ok); }
+.preview-box[data-state="error"] { background: #fdeceb; color: var(--danger); }
+.preview-box .preview-main { font-weight: 700; }
+.preview-box .preview-note { font-size: .9rem; }
+

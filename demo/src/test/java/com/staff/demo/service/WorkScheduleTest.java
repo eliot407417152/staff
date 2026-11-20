@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class WorkScheduleTest {
 
@@ -156,5 +158,64 @@ class WorkScheduleTest {
         assertEquals(LocalTime.of(17, 30), r.earliestOut());
 
         assertEquals(Status.NOT_YET, WorkSchedule.evaluate(today, null, null, List.of(), today.atTime(7, 0)).status());
+    }
+
+    // ---------- 請假：先決定時數，再選開始時間 ----------
+
+    @Test
+    void 請假開始時間只能是上班時段內的整點或半點() {
+        List<LocalTime> times = WorkSchedule.leaveStartTimes();
+        assertEquals(LocalTime.of(8, 30), times.get(0));
+        assertEquals(LocalTime.of(17, 0), times.get(times.size() - 1));
+        assertEquals(16, times.size());   // 上午 08:30–11:30 共 7 個，下午 13:00–17:00 共 9 個
+
+        assertNull(WorkSchedule.validateLeaveStartTime(LocalTime.of(8, 30)));
+        assertNull(WorkSchedule.validateLeaveStartTime(LocalTime.of(13, 0)));
+        assertNotNull(WorkSchedule.validateLeaveStartTime(LocalTime.of(12, 0)));    // 午休
+        assertNotNull(WorkSchedule.validateLeaveStartTime(LocalTime.of(12, 30)));
+        assertNotNull(WorkSchedule.validateLeaveStartTime(LocalTime.of(8, 0)));     // 還沒上班
+        assertNotNull(WorkSchedule.validateLeaveStartTime(LocalTime.of(17, 30)));   // 已經下班
+        assertNotNull(WorkSchedule.validateLeaveStartTime(LocalTime.of(9, 15)));    // 不是整點或半點
+        assertNotNull(WorkSchedule.validateLeaveStartTime(null));
+    }
+
+    @Test
+    void 當天從開始時間起還剩多少可以請() {
+        assertEquals(480, WorkSchedule.minutesLeftInDay(at(8, 30)));
+        assertEquals(300, WorkSchedule.minutesLeftInDay(at(11, 30)));   // 上午 30 分 + 下午 270 分
+        assertEquals(150, WorkSchedule.minutesLeftInDay(at(15, 0)));
+        assertEquals(30, WorkSchedule.minutesLeftInDay(at(17, 0)));
+    }
+
+    @Test
+    void 依時數與開始時間算出結束時間_自動跳過午休和非上班日() {
+        LocalDate friday = LocalDate.of(2026, 11, 20);
+        assertEquals(at(17, 30), WorkSchedule.leaveEnd(at(8, 30), 480, WEEKDAY));
+        assertEquals(at(16, 0), WorkSchedule.leaveEnd(at(14, 0), 120, WEEKDAY));
+        assertEquals(at(12, 0), WorkSchedule.leaveEnd(at(8, 30), 210, WEEKDAY));
+        // 11:30 開始請 1 小時：上午 30 分鐘 + 下午 30 分鐘，要跳過午休
+        assertEquals(at(13, 30), WorkSchedule.leaveEnd(at(11, 30), 60, WEEKDAY));
+        // 星期五 15:00 請 4 小時：當天剩 2.5 小時，其餘 1.5 小時接到下週一 10:00
+        assertEquals(LocalDate.of(2026, 11, 23).atTime(10, 0),
+                WorkSchedule.leaveEnd(friday.atTime(15, 0), 240, WEEKDAY));
+        // 16 小時 = 兩個整天；12 小時 = 一天 + 隔天上午到 13:30
+        assertEquals(DAY.plusDays(1).atTime(17, 30), WorkSchedule.leaveEnd(at(8, 30), 960, WEEKDAY));
+        assertEquals(DAY.plusDays(1).atTime(13, 30), WorkSchedule.leaveEnd(at(8, 30), 720, WEEKDAY));
+        // 隔天是國定假日就跳過
+        Predicate<LocalDate> thursdayOff = d -> WEEKDAY.test(d) && !d.equals(DAY.plusDays(1));
+        assertEquals(DAY.plusDays(2).atTime(17, 30), WorkSchedule.leaveEnd(at(8, 30), 960, thursdayOff));
+        assertNull(WorkSchedule.leaveEnd(at(8, 30), 0, WEEKDAY));
+    }
+
+    @Test
+    void 算出來的結束時間_重新計算請假時數必定吻合() {
+        Predicate<LocalDate> thursdayOff = d -> WEEKDAY.test(d) && !d.equals(DAY.plusDays(1));
+        for (LocalTime start : WorkSchedule.leaveStartTimes()) {
+            for (int minutes = 30; minutes <= 960; minutes += 30) {
+                LocalDateTime s = DAY.atTime(start);
+                LocalDateTime e = WorkSchedule.leaveEnd(s, minutes, thursdayOff);
+                assertEquals(minutes, WorkSchedule.leaveMinutes(s, e, thursdayOff), start + " + " + minutes);
+            }
+        }
     }
 }

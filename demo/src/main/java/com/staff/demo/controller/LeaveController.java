@@ -4,6 +4,7 @@ import com.staff.demo.dto.LeaveRequestForm;
 import com.staff.demo.entity.LeaveRequest;
 import com.staff.demo.service.LeaveService;
 import com.staff.demo.service.TyphoonService;
+import com.staff.demo.service.WorkSchedule;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,8 +17,12 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** 請假：申請、取消、審核。網頁（/front/leaves、/front/approvals、/admin/leaves）與 API（/api/leaves） */
 @Controller
@@ -74,10 +79,47 @@ public class LeaveController {
         return "redirect:/front/leaves";
     }
 
+    /** 請假試算：不會送出，只回傳預計結束時間與檢查結果，畫面上選完欄位就會即時顯示 */
+    @Operation(summary = "請假試算（不會送出）", tags = "請假",
+            description = "依假別、時數、開始日期與時間，算出結束時間並檢查額度與重複請假；開始時間格式 HH:mm。")
+    @GetMapping({"/front/leaves/preview", "/api/leaves/preview"})
+    @ResponseBody
+    public Map<String, Object> preview(Authentication auth,
+                                       @RequestParam(required = false) Long leaveTypeId,
+                                       @RequestParam(required = false) BigDecimal hours,
+                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+                                       @RequestParam(required = false) @DateTimeFormat(pattern = "HH:mm") LocalTime startTime) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (leaveTypeId == null || hours == null || startDate == null || startTime == null) {
+            out.put("ok", false);
+            out.put("incomplete", true);
+            out.put("message", "請依序選擇假別、請假時數、開始日期與開始時間，系統會自動算出結束時間。");
+            return out;
+        }
+        LeaveRequestForm f = new LeaveRequestForm();
+        f.setLeaveTypeId(leaveTypeId);
+        f.setHours(hours);
+        f.setStartDate(startDate);
+        f.setStartTime(startTime);
+        try {
+            LeaveService.LeavePlan p = leaveService.plan(auth.getName(), f);
+            out.put("ok", true);
+            out.put("summary", p.summary());
+            out.put("quota", p.quotaNote());
+            out.put("notice", p.notice());
+            out.put("end", p.end().toString());
+        } catch (IllegalArgumentException ex) {
+            out.put("ok", false);
+            out.put("message", ex.getMessage());
+        }
+        return out;
+    }
+
     private String leavesView(Authentication auth, Model model) {
         LocalDate today = LocalDate.now();
         model.addAttribute("typhoons", typhoonService.forEmployee(auth.getName(), today.minusDays(90), today.plusDays(30)));
         model.addAttribute("types", leaveService.activeTypes());
+        model.addAttribute("startTimes", WorkSchedule.leaveStartTimes());
         model.addAttribute("balances", leaveService.balances(auth.getName()));
         model.addAttribute("leaves", leaveService.mine(auth.getName()));
         return "front/leaves";
@@ -148,7 +190,7 @@ public class LeaveController {
     }
 
     @Operation(summary = "申請請假", tags = TAG,
-            description = "時間格式如 2026-11-12T09:00:00。時數只計上班時間（08:30–12:00、13:00–17:30），週末、國定假日、颱風假不計。")
+            description = "請依序提供假別、時數（hours，0.5 小時為單位）、開始日期（startDate）與開始時間（startTime，HH:mm，只能選 08:30–17:00 的整點或半點）；結束時間由系統依上班時間、午休、假日自動算出。可先用 GET /api/leaves/preview 試算。")
     @PostMapping("/api/leaves")
     @ResponseBody
     @ResponseStatus(HttpStatus.CREATED)

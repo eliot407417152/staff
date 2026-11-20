@@ -35,27 +35,139 @@
 
     <section class="card">
       <h2>申請請假</h2>
-      <form th:object="${form}" th:action="@{/front/leaves}" method="post">
+      <form id="leave-form" th:object="${form}" th:action="@{/front/leaves}" method="post"
+            th:attr="data-preview-url=@{/front/leaves/preview}">
         <ul class="errors" th:if="${#fields.hasErrors('*')}">
           <li th:each="err : ${#fields.detailedErrors()}" th:text="${err.message}">錯誤</li>
         </ul>
-        <div class="grid2">
-          <div>
-            <label for="leaveTypeId">假別</label>
-            <select th:field="*{leaveTypeId}">
+        <ol class="leave-steps">
+          <li>
+            <label for="leaveTypeId">① 假別</label>
+            <select th:field="*{leaveTypeId}" required>
               <option value="">請選擇</option>
               <option th:each="t : ${types}" th:value="${t.id}" th:text="${t.name}">事假</option>
             </select>
-          </div>
-          <div><label for="startAt">開始時間</label><input type="datetime-local" th:field="*{startAt}" required></div>
-          <div><label for="endAt">結束時間</label><input type="datetime-local" th:field="*{endAt}" required></div>
+          </li>
+          <li>
+            <label for="hours">② 要請幾個小時</label>
+            <input type="number" th:field="*{hours}" min="0.5" max="240" step="0.5" inputmode="decimal" required>
+            <div class="quick" role="group" aria-label="常用時數">
+              <button type="button" class="secondary" data-hours="1">1 小時</button>
+              <button type="button" class="secondary" data-hours="2">2 小時</button>
+              <button type="button" class="secondary" data-hours="4">半天（4 小時）</button>
+              <button type="button" class="secondary" data-hours="8">全天（8 小時）</button>
+            </div>
+            <p class="hint">以 0.5 小時為單位。一天最多 8 小時，超過 8 小時會自動接到下一個上班日。</p>
+          </li>
+          <li>
+            <span class="step-title">③ 從什麼時候開始</span>
+            <div class="grid2">
+              <div>
+                <label for="startDate">日期</label>
+                <input type="date" th:field="*{startDate}" required>
+              </div>
+              <div>
+                <label for="startTime">時間</label>
+                <select th:field="*{startTime}" required>
+                  <option value="">請選擇</option>
+                  <option th:each="t : ${startTimes}" th:value="${#temporals.format(t, 'HH:mm')}"
+                          th:text="${#temporals.format(t, 'HH:mm')}">08:30</option>
+                </select>
+              </div>
+            </div>
+            <p class="hint">上班時間 08:30–17:30，午休 12:00–13:00 不能當開始時間。系統會自動扣掉午休、週末、國定假日與颱風假，算出結束時間。</p>
+          </li>
+        </ol>
+
+        <div id="leave-preview" class="preview-box" data-state="idle" role="status" aria-live="polite">
+          請依序選擇假別、請假時數、開始日期與開始時間，系統會自動算出結束時間。
         </div>
+
         <label for="reason">事由</label>
         <input th:field="*{reason}" maxlength="200" required>
-        <p class="hint">上班時間 08:30–17:30，午休 12:00–13:00、週末、國定假日（依政府辦公日曆表）與颱風假不計入請假時數。</p>
-        <div class="form-actions"><button type="submit">送出申請</button></div>
+        <div class="form-actions"><button type="submit" id="leave-submit">送出申請</button></div>
       </form>
     </section>
+
+    <script>
+      (function () {
+        var form = document.getElementById('leave-form');
+        if (!form) { return; }
+        var box = document.getElementById('leave-preview');
+        var submit = document.getElementById('leave-submit');
+        var url = form.getAttribute('data-preview-url');
+        var type = form.elements['leaveTypeId'];
+        var hours = form.elements['hours'];
+        var date = form.elements['startDate'];
+        var time = form.elements['startTime'];
+        var timer = null;
+        var seq = 0;
+        var IDLE = '請依序選擇假別、請假時數、開始日期與開始時間，系統會自動算出結束時間。';
+
+        function render(state, lines) {
+          box.setAttribute('data-state', state);
+          box.textContent = '';
+          lines.forEach(function (l) {
+            var p = document.createElement('p');
+            p.textContent = l.text;
+            if (l.cls) { p.className = l.cls; }
+            box.appendChild(p);
+          });
+          submit.disabled = (state === 'error');
+        }
+
+        function refresh() {
+          var mine = ++seq;
+          if (!type.value || !hours.value || !date.value || !time.value) {
+            render('idle', [{ text: IDLE }]);
+            return;
+          }
+          var q = new URLSearchParams({
+            leaveTypeId: type.value, hours: hours.value, startDate: date.value, startTime: time.value
+          });
+          render('loading', [{ text: '計算中…' }]);
+          fetch(url + '?' + q.toString(), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+            .then(function (r) { if (!r.ok) { throw new Error('http ' + r.status); } return r.json(); })
+            .then(function (d) {
+              if (mine !== seq) { return; }
+              if (d.ok) {
+                var lines = [{ text: d.summary, cls: 'preview-main' }];
+                if (d.quota) { lines.push({ text: d.quota }); }
+                if (d.notice) { lines.push({ text: d.notice, cls: 'preview-note' }); }
+                render('ok', lines);
+              } else if (d.incomplete) {
+                render('idle', [{ text: IDLE }]);
+              } else {
+                render('error', [{ text: d.message }]);
+              }
+            })
+            .catch(function () {
+              if (mine !== seq) { return; }
+              render('idle', [{ text: '暫時無法試算，仍可直接送出，系統會再檢查一次。' }]);
+            });
+        }
+
+        function schedule() {
+          clearTimeout(timer);
+          timer = setTimeout(refresh, 250);
+        }
+
+        [type, hours, date, time].forEach(function (el) {
+          el.addEventListener('change', schedule);
+          el.addEventListener('input', schedule);
+        });
+        form.querySelectorAll('[data-hours]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            hours.value = b.getAttribute('data-hours');
+            schedule();
+          });
+        });
+        form.addEventListener('submit', function () {
+          setTimeout(function () { submit.disabled = true; submit.textContent = '送出中…'; }, 0);
+        });
+        refresh();
+      })();
+    </script>
 
     <section class="card" th:unless="${#lists.isEmpty(typhoons)}">
       <h2>颱風假（停班日）</h2>

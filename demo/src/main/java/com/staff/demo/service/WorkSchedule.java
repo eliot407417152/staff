@@ -107,6 +107,73 @@ public final class WorkSchedule {
         return out;
     }
 
+    // ===================== 請假：先決定時數，再選開始時間 =====================
+
+    /** 請假的最小單位（分鐘）：時數與開始時間都以 30 分鐘為單位 */
+    public static final int LEAVE_STEP_MINUTES = 30;
+
+    /** 可選的請假開始時間：08:30–17:00 每 30 分鐘一個，午休（12:00–13:00）不能當開始時間 */
+    public static List<LocalTime> leaveStartTimes() {
+        List<LocalTime> out = new ArrayList<>();
+        for (int[] seg : SEGMENTS) {
+            for (int m = seg[0]; m < seg[1]; m += LEAVE_STEP_MINUTES) {
+                out.add(LocalTime.of(m / 60, m % 60));
+            }
+        }
+        return out;
+    }
+
+    /** 請假開始時間不合法時回傳原因，合法回傳 null */
+    public static String validateLeaveStartTime(LocalTime t) {
+        if (t == null) {
+            return "請選擇開始時間";
+        }
+        if (leaveStartTimes().contains(t)) {
+            return null;
+        }
+        if (!t.isBefore(LUNCH_START) && t.isBefore(LUNCH_END)) {
+            return "12:00–13:00 是午休時間，不能當請假的開始時間";
+        }
+        return "開始時間必須在 08:30–17:00 之間，且是整點或半點";
+    }
+
+    /** 從 start 起，當天還剩下的上班分鐘數（已扣午休） */
+    public static int minutesLeftInDay(LocalDateTime start) {
+        return leaveMinutes(start, start.toLocalDate().plusDays(1).atStartOfDay(), d -> true);
+    }
+
+    /**
+     * 從 start 開始請 minutes 分鐘的假，算出結束時間：
+     * 只在上班時段累計，自動跳過午休與非上班日，跨日時每天都從 08:30 接續。算不出來時回傳 null。
+     */
+    public static LocalDateTime leaveEnd(LocalDateTime start, int minutes, Predicate<LocalDate> workday) {
+        if (minutes <= 0) {
+            return null;
+        }
+        int remaining = minutes;
+        LocalDateTime cursor = start;
+        for (int i = 0; i < 400; i++) {
+            LocalDate d = cursor.toLocalDate();
+            if (workday.test(d)) {
+                for (int[] seg : SEGMENTS) {
+                    LocalDateTime segStart = d.atStartOfDay().plusMinutes(seg[0]);
+                    LocalDateTime segEnd = d.atStartOfDay().plusMinutes(seg[1]);
+                    LocalDateTime from = cursor.isAfter(segStart) ? cursor : segStart;
+                    if (!from.isBefore(segEnd)) {
+                        continue;
+                    }
+                    int available = (int) Duration.between(from, segEnd).toMinutes();
+                    if (remaining <= available) {
+                        return from.plusMinutes(remaining);
+                    }
+                    remaining -= available;
+                }
+            }
+            cursor = d.plusDays(1).atStartOfDay();
+        }
+        return null;
+    }
+
     // ===================== 出勤工時 =====================
 
     /**
